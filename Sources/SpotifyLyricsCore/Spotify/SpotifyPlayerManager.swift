@@ -6,6 +6,9 @@ public final class SpotifyPlayerManager: ObservableObject {
     @Published public var currentTrack: TrackInfo?
     @Published public var playerState: AppleScriptBridge.PlayerState = .stopped
     @Published public var isSpotifyRunning = false
+    @Published public var isShuffling = false
+    @Published public var isRepeating = false
+    @Published public var artworkURL: URL?
 
     private let bridge = AppleScriptBridge()
     private var pollTimer: Timer?
@@ -58,11 +61,18 @@ public final class SpotifyPlayerManager: ObservableObject {
         playerState = info.state
         lastPolledPosition = info.position
         lastPollTime = CFAbsoluteTimeGetCurrent()
+        isShuffling = info.isShuffling
+        isRepeating = info.isRepeating
 
         let newKey = info.track.cacheKey
         if newKey != lastTrackKey && !info.track.title.isEmpty {
             lastTrackKey = newKey
             currentTrack = info.track
+            if let urlStr = info.artworkURLString, let url = URL(string: urlStr) {
+                artworkURL = url
+            } else {
+                artworkURL = nil
+            }
             onTrackChanged?(info.track)
         }
     }
@@ -71,6 +81,31 @@ public final class SpotifyPlayerManager: ObservableObject {
         bridge.seekTo(position)
         lastPolledPosition = position
         lastPollTime = CFAbsoluteTimeGetCurrent()
+    }
+
+    public func playPause() {
+        bridge.playPause()
+        playerState = (playerState == .playing) ? .paused : .playing
+    }
+
+    public func nextTrack() {
+        bridge.nextTrack()
+    }
+
+    public func previousTrack() {
+        bridge.previousTrack()
+    }
+
+    public func toggleShuffle() {
+        let newValue = !isShuffling
+        bridge.setShuffling(newValue)
+        isShuffling = newValue
+    }
+
+    public func toggleRepeat() {
+        let newValue = !isRepeating
+        bridge.setRepeating(newValue)
+        isRepeating = newValue
     }
 
     deinit {

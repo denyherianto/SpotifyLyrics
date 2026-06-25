@@ -10,7 +10,7 @@ public final class LyricsOverlayWindow {
 
     public init() {}
 
-    public func show(with view: some View) {
+    public func show(with view: some View, size: OverlaySize = .medium) {
         if panel != nil {
             panel?.orderFront(nil)
             return
@@ -19,8 +19,7 @@ public final class LyricsOverlayWindow {
         guard let screen = NSScreen.main else { return }
         let screenFrame = screen.visibleFrame
 
-        let width: CGFloat = 700
-        let height: CGFloat = 260
+        let (width, height) = size.dimensions
         let x = screenFrame.midX - width / 2
         let y = screenFrame.minY + 20
 
@@ -40,6 +39,7 @@ public final class LyricsOverlayWindow {
         panel.isMovableByWindowBackground = true
         panel.hidesOnDeactivate = false
         panel.ignoresMouseEvents = false
+        panel.acceptsMouseMovedEvents = true
         panel.titlebarAppearsTransparent = true
         panel.titleVisibility = .hidden
 
@@ -70,6 +70,15 @@ public final class LyricsOverlayWindow {
 
     public func setOpacity(_ opacity: Double) {
         panel?.alphaValue = opacity
+    }
+
+    public func resize(to size: OverlaySize) {
+        guard let panel else { return }
+        let (width, height) = size.dimensions
+        let currentFrame = panel.frame
+        let newX = currentFrame.midX - width / 2
+        let newY = currentFrame.midY - height / 2
+        panel.setFrame(NSRect(x: newX, y: newY, width: width, height: height), display: true, animate: true)
     }
 
     public func close() {

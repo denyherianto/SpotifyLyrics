@@ -50,6 +50,8 @@ struct TestMain {
         testParseNumber()
         testLyricsManager()
         testModels()
+        testPlaybackInfo()
+        testOverlaySize()
 
         print("\n========================================")
         if failures.isEmpty {

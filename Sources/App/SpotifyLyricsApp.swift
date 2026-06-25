@@ -25,12 +25,27 @@ final class OverlayController: ObservableObject {
     @Published var overlayOpacity: Double = 0.9 {
         didSet { overlayWindow.setOpacity(overlayOpacity) }
     }
+    @Published var overlaySize: OverlaySize = .medium {
+        didSet {
+            overlayWindow.resize(to: overlaySize)
+            UserDefaults.standard.set(overlaySize.rawValue, forKey: "overlaySize")
+        }
+    }
 
     let overlayWindow = LyricsOverlayWindow()
 
+    init() {
+        if let saved = UserDefaults.standard.string(forKey: "overlaySize"),
+           let size = OverlaySize(rawValue: saved) {
+            self._overlaySize = Published(initialValue: size)
+        }
+    }
+
     func show(lyricsManager: LyricsManager, playerManager: SpotifyPlayerManager) {
-        let view = LyricsOverlayView(lyricsManager: lyricsManager, playerManager: playerManager)
-        overlayWindow.show(with: view)
+        let view = LyricsOverlayView(lyricsManager: lyricsManager, playerManager: playerManager, onClose: { [weak self] in
+            self?.hide()
+        })
+        overlayWindow.show(with: view, size: overlaySize)
         isVisible = true
     }
 

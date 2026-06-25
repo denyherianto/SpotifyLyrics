@@ -9,11 +9,18 @@ public final class AppleScriptBridge {
         public let track: TrackInfo
         public let state: PlayerState
         public let position: TimeInterval
+        public let artworkURLString: String?
+        public let isShuffling: Bool
+        public let isRepeating: Bool
 
-        public init(track: TrackInfo, state: PlayerState, position: TimeInterval) {
+        public init(track: TrackInfo, state: PlayerState, position: TimeInterval,
+                     artworkURLString: String? = nil, isShuffling: Bool = false, isRepeating: Bool = false) {
             self.track = track
             self.state = state
             self.position = position
+            self.artworkURLString = artworkURLString
+            self.isShuffling = isShuffling
+            self.isRepeating = isRepeating
         }
     }
 
@@ -38,7 +45,10 @@ public final class AppleScriptBridge {
             set trackDuration to duration of current track
             set playerPos to player position
             set pState to player state as string
-            return trackName & "|||" & trackArtist & "|||" & trackAlbum & "|||" & (trackDuration / 1000) & "|||" & playerPos & "|||" & pState
+            set artUrl to artwork url of current track
+            set shuf to shuffling
+            set rep to repeating
+            return trackName & "|||" & trackArtist & "|||" & trackAlbum & "|||" & (trackDuration / 1000) & "|||" & playerPos & "|||" & pState & "|||" & artUrl & "|||" & shuf & "|||" & rep
         end tell
         """
 
@@ -73,11 +83,49 @@ public final class AppleScriptBridge {
         default: .unknown
         }
 
+        var artworkURLString: String? = nil
+        var isShuffling = false
+        var isRepeating = false
+
+        if parts.count >= 7 {
+            let url = parts[6].trimmingCharacters(in: .whitespacesAndNewlines)
+            if !url.isEmpty { artworkURLString = url }
+        }
+        if parts.count >= 8 {
+            isShuffling = parts[7].trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "true"
+        }
+        if parts.count >= 9 {
+            isRepeating = parts[8].trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "true"
+        }
+
         return PlaybackInfo(
             track: TrackInfo(title: title, artist: artist, album: album, duration: duration),
             state: state,
-            position: position
+            position: position,
+            artworkURLString: artworkURLString,
+            isShuffling: isShuffling,
+            isRepeating: isRepeating
         )
+    }
+
+    public func playPause() {
+        _ = runAppleScript("tell application \"Spotify\" to playpause")
+    }
+
+    public func nextTrack() {
+        _ = runAppleScript("tell application \"Spotify\" to next track")
+    }
+
+    public func previousTrack() {
+        _ = runAppleScript("tell application \"Spotify\" to previous track")
+    }
+
+    public func setShuffling(_ enabled: Bool) {
+        _ = runAppleScript("tell application \"Spotify\" to set shuffling to \(enabled)")
+    }
+
+    public func setRepeating(_ enabled: Bool) {
+        _ = runAppleScript("tell application \"Spotify\" to set repeating to \(enabled)")
     }
 
     public func seekTo(_ position: TimeInterval) {
