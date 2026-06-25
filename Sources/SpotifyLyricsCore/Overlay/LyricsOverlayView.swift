@@ -4,11 +4,13 @@ import AppKit
 public struct LyricsOverlayView: View {
     @ObservedObject var lyricsManager: LyricsManager
     @ObservedObject var playerManager: SpotifyPlayerManager
+    @Binding var backgroundOpacity: Double
     var onClose: (() -> Void)?
 
-    public init(lyricsManager: LyricsManager, playerManager: SpotifyPlayerManager, onClose: (() -> Void)? = nil) {
+    public init(lyricsManager: LyricsManager, playerManager: SpotifyPlayerManager, backgroundOpacity: Binding<Double> = .constant(0.85), onClose: (() -> Void)? = nil) {
         self.lyricsManager = lyricsManager
         self.playerManager = playerManager
+        self._backgroundOpacity = backgroundOpacity
         self.onClose = onClose
     }
 
@@ -33,7 +35,7 @@ public struct LyricsOverlayView: View {
         .background(
             RoundedRectangle(cornerRadius: 16)
                 .fill(.ultraThinMaterial)
-                .opacity(0.85)
+                .opacity(backgroundOpacity)
         )
         .overlay(alignment: .topTrailing) {
             Button(action: { onClose?() }) {

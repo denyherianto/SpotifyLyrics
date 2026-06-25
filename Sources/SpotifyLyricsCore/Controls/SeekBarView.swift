@@ -5,13 +5,15 @@ public struct SeekBarView: View {
     @ObservedObject var playerManager: SpotifyPlayerManager
 
     let tint: Color
+    let showTotalDuration: Bool
 
     @State private var isDragging = false
     @State private var dragProgress: Double = 0
 
-    public init(playerManager: SpotifyPlayerManager, tint: Color = .white) {
+    public init(playerManager: SpotifyPlayerManager, tint: Color = .white, showTotalDuration: Bool = false) {
         self.playerManager = playerManager
         self.tint = tint
+        self.showTotalDuration = showTotalDuration
     }
 
     private var duration: TimeInterval {
@@ -72,7 +74,7 @@ public struct SeekBarView: View {
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundStyle(tint.opacity(0.7))
                 Spacer()
-                Text("-\(formatTime(max(0, duration - position)))")
+                Text(showTotalDuration ? formatTime(duration) : "-\(formatTime(max(0, duration - position)))")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundStyle(tint.opacity(0.7))
             }

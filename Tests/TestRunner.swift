@@ -52,6 +52,8 @@ struct TestMain {
         testModels()
         testPlaybackInfo()
         testOverlaySize()
+        testSettingsPersistence()
+        testSeekBarFormatting()
 
         print("\n========================================")
         if failures.isEmpty {

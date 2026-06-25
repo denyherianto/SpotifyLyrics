@@ -48,8 +48,16 @@ public final class LyricsOverlayWindow {
         hostingView.autoresizingMask = [.width, .height]
         panel.contentView?.addSubview(hostingView)
 
+        // Restore saved position
+        panel.setFrameUsingName("LyricsOverlay")
+        panel.setFrameAutosaveName("LyricsOverlay")
+
         panel.orderFront(nil)
         self.panel = panel
+    }
+
+    public func showIfCreated() {
+        panel?.orderFront(nil)
     }
 
     public func hide() {
@@ -69,7 +77,8 @@ public final class LyricsOverlayWindow {
     }
 
     public func setOpacity(_ opacity: Double) {
-        panel?.alphaValue = opacity
+        // No longer setting panel alphaValue — opacity is handled
+        // per-view on the background only, so text/controls stay fully visible.
     }
 
     public func resize(to size: OverlaySize) {

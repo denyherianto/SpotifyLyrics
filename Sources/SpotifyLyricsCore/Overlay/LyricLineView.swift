@@ -16,6 +16,8 @@ public struct LyricLineView: View {
     public var body: some View {
         Text(text)
             .font(.system(size: fontSize, weight: isActive ? .bold : .regular, design: .rounded))
+            .multilineTextAlignment(isActive ? .center : .center)
+            .frame(maxWidth: .infinity, alignment: .center)
             .foregroundStyle(foregroundColor)
             .opacity(lineOpacity)
             .scaleEffect(isActive ? 1.0 : 0.95)
