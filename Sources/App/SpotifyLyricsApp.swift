@@ -8,13 +8,7 @@ struct SpotifyLyricsApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        MenuBarExtra("SpotifyLyrics", systemImage: "music.note.list") {
-            MenuBarView()
-                .environmentObject(appDelegate.playerManager)
-                .environmentObject(appDelegate.lyricsManager)
-                .environmentObject(appDelegate.overlayController)
-        }
-        .menuBarExtraStyle(.window)
+        Settings { EmptyView() }
     }
 }
 
@@ -40,6 +34,9 @@ final class OverlayController: ObservableObject {
             UserDefaults.standard.set(overlaySize.rawValue, forKey: "overlaySize")
         }
     }
+    @Published var showMenuBarTrackInfo: Bool = true {
+        didSet { UserDefaults.standard.set(showMenuBarTrackInfo, forKey: "showMenuBarTrackInfo") }
+    }
 
     let overlayWindow = LyricsOverlayWindow()
 
@@ -58,6 +55,9 @@ final class OverlayController: ObservableObject {
         }
         if defaults.object(forKey: "overlayVisible") != nil {
             self._isVisible = Published(initialValue: defaults.bool(forKey: "overlayVisible"))
+        }
+        if defaults.object(forKey: "showMenuBarTrackInfo") != nil {
+            self._showMenuBarTrackInfo = Published(initialValue: defaults.bool(forKey: "showMenuBarTrackInfo"))
         }
     }
 
@@ -89,11 +89,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let playerManager = SpotifyPlayerManager()
     let lyricsManager = LyricsManager()
     let overlayController = OverlayController()
+    private var statusBarController: StatusBarController?
     private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Hide dock icon
         NSApp.setActivationPolicy(.accessory)
+
+        // Setup menu bar status item with scrolling track info
+        statusBarController = StatusBarController(
+            playerManager: playerManager,
+            lyricsManager: lyricsManager,
+            overlayController: overlayController
+        )
 
         playerManager.onTrackChanged = { [weak self] track in
             guard let self else { return }

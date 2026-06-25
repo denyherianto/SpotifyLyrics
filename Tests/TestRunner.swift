@@ -54,6 +54,7 @@ struct TestMain {
         testOverlaySize()
         testSettingsPersistence()
         testSeekBarFormatting()
+        testMenuBarTrackInfo()
 
         print("\n========================================")
         if failures.isEmpty {

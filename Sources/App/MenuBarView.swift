@@ -208,6 +208,12 @@ struct MenuBarView: View {
                         .controlSize(.small)
                         .labelsHidden()
                 }
+                settingsRow("Show Track") {
+                    Toggle("", isOn: $overlayController.showMenuBarTrackInfo)
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                        .labelsHidden()
+                }
             }
 
             Divider()
