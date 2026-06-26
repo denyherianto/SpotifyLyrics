@@ -258,6 +258,9 @@ struct MenuBarView: View {
                     Slider(value: $overlayController.overlayOpacity, in: 0.3...1.0)
                         .controlSize(.small)
                         .frame(maxWidth: 120)
+                        .onChange(of: overlayController.overlayOpacity) { _ in
+                            overlayController.commitOpacity()
+                        }
                     Text("\(Int(overlayController.overlayOpacity * 100))%")
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(.secondary)

@@ -23,11 +23,8 @@ final class OverlayController: ObservableObject {
             UserDefaults.standard.set(alwaysOnTop, forKey: "overlayAlwaysOnTop")
         }
     }
-    @Published var overlayOpacity: Double = 0.9 {
-        didSet {
-            UserDefaults.standard.set(overlayOpacity, forKey: "overlayOpacity")
-        }
-    }
+    @Published var overlayOpacity: Double = 0.9
+    private var opacitySaveTask: DispatchWorkItem?
     @Published var overlaySize: OverlaySize = .medium {
         didSet {
             overlayWindow.resize(to: overlaySize)
@@ -47,6 +44,17 @@ final class OverlayController: ObservableObject {
         didSet { UserDefaults.standard.set(targetLanguage.rawValue, forKey: "targetLanguage") }
     }
     let overlayWindow = LyricsOverlayWindow()
+
+    /// Debounced opacity persistence — avoids disk I/O on every slider frame.
+    func commitOpacity() {
+        opacitySaveTask?.cancel()
+        let value = overlayOpacity
+        let task = DispatchWorkItem {
+            UserDefaults.standard.set(value, forKey: "overlayOpacity")
+        }
+        opacitySaveTask = task
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: task)
+    }
 
     init() {
         let defaults = UserDefaults.standard
@@ -115,6 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let soundClassifier = SoundClassifier()
     private var statusBarController: StatusBarController?
     private var cancellables = Set<AnyCancellable>()
+    private var enrichmentDebounceTask: DispatchWorkItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Hide dock icon
@@ -133,13 +142,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         lyricsManager.showTranslation = overlayController.showTranslation
         lyricsManager.targetLanguage = overlayController.targetLanguage.rawValue
 
+        // Sync enrichment settings and debounce refresh to avoid
+        // multiple expensive enrichment calls when toggling quickly.
         overlayController.$showRomanization
             .dropFirst()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] value in
                 guard let self else { return }
                 self.lyricsManager.showRomanization = value
-                self.lyricsManager.refreshEnrichment()
+                self.scheduleEnrichmentRefresh()
             }
             .store(in: &cancellables)
 
@@ -149,7 +160,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .sink { [weak self] value in
                 guard let self else { return }
                 self.lyricsManager.showTranslation = value
-                self.lyricsManager.refreshEnrichment()
+                self.scheduleEnrichmentRefresh()
             }
             .store(in: &cancellables)
 
@@ -160,7 +171,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let self else { return }
                 self.lyricsManager.targetLanguage = value.rawValue
                 if self.lyricsManager.showTranslation {
-                    self.lyricsManager.refreshEnrichment()
+                    self.scheduleEnrichmentRefresh()
                 }
             }
             .store(in: &cancellables)
@@ -174,12 +185,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         playerManager.startPolling()
 
-        // Start position tracking for lyrics sync
+        // Position tracking: fixed-interval fallback at 100ms
         Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 self.lyricsManager.updateCurrentLine(at: self.playerManager.playbackPosition)
+                self.scheduleNextLine()
             }
+        }
+
+        // Predictive line switching: fires precisely at next line's timestamp
+        playerManager.onPredictiveLineSwitch = { [weak self] position in
+            guard let self else { return }
+            self.lyricsManager.updateCurrentLine(at: position)
+            self.scheduleNextLine()
         }
 
         // Show overlay (respect saved visibility)
@@ -204,6 +223,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
             .store(in: &cancellables)
+    }
+
+    /// Coalesces rapid enrichment setting changes into a single refresh.
+    private func scheduleEnrichmentRefresh() {
+        enrichmentDebounceTask?.cancel()
+        let task = DispatchWorkItem { [weak self] in
+            self?.lyricsManager.refreshEnrichment()
+        }
+        enrichmentDebounceTask = task
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: task)
+    }
+
+    private func scheduleNextLine() {
+        if let nextTimestamp = lyricsManager.nextLineTimestamp {
+            playerManager.scheduleNextLineSwitch(at: nextTimestamp)
+        }
     }
 
     func applicationWillTerminate(_ notification: Notification) {

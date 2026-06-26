@@ -168,6 +168,20 @@ public struct LyricsOverlayView: View {
                 guard !isAutoScrolling else { return }
                 isManualScrolling = true
             }
+            .onChange(of: lyricsManager.enrichment.count) { _ in
+                // When enrichment changes (translation/romanization toggled),
+                // re-scroll to the current line so it stays centered.
+                isManualScrolling = false
+                isAutoScrolling = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    withAnimation(animationMode.transition) {
+                        proxy.scrollTo(lyricsManager.currentLineIndex, anchor: .center)
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                        isAutoScrolling = false
+                    }
+                }
+            }
         }
     }
 

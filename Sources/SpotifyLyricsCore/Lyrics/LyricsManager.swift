@@ -94,10 +94,9 @@ public final class LyricsManager: ObservableObject {
         // Cancel any in-flight enrichment
         enrichmentTask?.cancel()
         enrichmentTask = nil
-        // Clear all enrichment cache to avoid stale translations
-        enrichmentCache.removeAll()
         enrichment = [:]
-        // Find lyrics cache key and restart
+        // Find lyrics cache key and restart — the new enrichment cache key
+        // (which encodes current settings) will naturally miss stale entries.
         for (key, cached) in cache where cached == currentLines {
             startEnrichment(for: key)
             return
@@ -166,6 +165,14 @@ public final class LyricsManager: ObservableObject {
         if index != currentLineIndex {
             currentLineIndex = index
         }
+    }
+
+    /// Returns the timestamp of the next lyric line after the current one,
+    /// or nil if at the last line or no lyrics are loaded.
+    public var nextLineTimestamp: TimeInterval? {
+        let nextIndex = currentLineIndex + 1
+        guard nextIndex < currentLines.count else { return nil }
+        return currentLines[nextIndex].timestamp
     }
 
     public func clearCache() {
