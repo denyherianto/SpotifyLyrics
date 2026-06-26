@@ -52,6 +52,7 @@ struct TestMain {
         testMenuBarTrackInfo()
         testAnimationMode()
         testEnrichment()
+        testOverlayTrackInfo()
 
         print("\n========================================")
         if failures.isEmpty {

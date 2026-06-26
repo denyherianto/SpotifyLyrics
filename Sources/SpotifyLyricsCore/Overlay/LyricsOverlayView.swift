@@ -39,6 +39,22 @@ public struct LyricsOverlayView: View {
                 .fill(.ultraThinMaterial)
                 .opacity(backgroundOpacity)
         )
+        .overlay(alignment: .topLeading) {
+            if let track = playerManager.currentTrack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(track.title)
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.9))
+                    Text(track.artist)
+                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .foregroundStyle(.white.opacity(0.6))
+                }
+                .lineLimit(1)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .opacity(isOverlayHovered ? 1 : 0)
+            }
+        }
         .overlay(alignment: .topTrailing) {
             Button(action: { onClose?() }) {
                 Image(systemName: "xmark")
