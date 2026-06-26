@@ -1,5 +1,6 @@
 @testable import SpotifyLyricsCore
 
+
 @MainActor
 func testModels() {
     print("--- Model Tests ---")

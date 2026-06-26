@@ -1,5 +1,6 @@
 @testable import SpotifyLyricsCore
 
+
 @MainActor
 func testPlaybackInfo() {
     print("--- PlaybackInfo Tests ---")

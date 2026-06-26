@@ -9,40 +9,61 @@ public struct LyricLineView: View {
     public let position: TimeInterval
     /// Effective end time of this line, used for the karaoke sweep.
     public let lineEnd: TimeInterval
+    /// Optional enrichment (romanization / translation) for this line.
+    public let enrichment: LineEnrichment?
 
-    public init(line: LyricLine, isActive: Bool, offset: Int, mode: AnimationMode, position: TimeInterval, lineEnd: TimeInterval) {
+    public init(line: LyricLine, isActive: Bool, offset: Int, mode: AnimationMode, position: TimeInterval, lineEnd: TimeInterval, enrichment: LineEnrichment? = nil) {
         self.line = line
         self.isActive = isActive
         self.offset = offset
         self.mode = mode
         self.position = position
         self.lineEnd = lineEnd
+        self.enrichment = enrichment
     }
 
     @State private var isHovered = false
 
     public var body: some View {
-        content
-            .multilineTextAlignment(.center)
-            .frame(maxWidth: .infinity, alignment: .center)
-            .opacity(lineOpacity)
-            .scaleEffect(scale)
-            .padding(.vertical, 2)
-            .padding(.horizontal, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 6)
-                    .fill(.white.opacity(isHovered ? 0.1 : 0))
-            )
-            .onHover { hovering in
-                isHovered = hovering
-                if hovering {
-                    NSCursor.pointingHand.push()
-                } else {
-                    NSCursor.pop()
-                }
+        VStack(spacing: 2) {
+            if let rom = enrichment?.romanization {
+                Text(rom)
+                    .font(.system(size: enrichmentFontSize, weight: .regular, design: .rounded))
+                    .foregroundStyle(.white.opacity(isActive ? 0.6 : 0.4))
+                    .shadow(color: .black.opacity(0.4), radius: 2, x: 0, y: 1)
+                    .transition(.opacity)
             }
-            .animation(mode.transition, value: isActive)
-            .animation(.easeInOut(duration: 0.15), value: isHovered)
+
+            content
+
+            if let trans = enrichment?.translation {
+                Text(trans)
+                    .font(.system(size: enrichmentFontSize, weight: .regular, design: .rounded))
+                    .foregroundStyle(.white.opacity(isActive ? 0.55 : 0.35))
+                    .shadow(color: .black.opacity(0.4), radius: 2, x: 0, y: 1)
+                    .transition(.opacity)
+            }
+        }
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity, alignment: .center)
+        .opacity(lineOpacity)
+        .scaleEffect(scale)
+        .padding(.vertical, 2)
+        .padding(.horizontal, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(.white.opacity(isHovered ? 0.1 : 0))
+        )
+        .onHover { hovering in
+            isHovered = hovering
+            if hovering {
+                NSCursor.pointingHand.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
+        .animation(mode.transition, value: isActive)
+        .animation(.easeInOut(duration: 0.15), value: isHovered)
     }
 
     @ViewBuilder
@@ -86,6 +107,10 @@ public struct LyricLineView: View {
 
     private var fontSize: CGFloat {
         isActive ? 24 : 18
+    }
+
+    private var enrichmentFontSize: CGFloat {
+        isActive ? 14 : 12
     }
 
     private var scale: CGFloat {

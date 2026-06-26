@@ -1,6 +1,7 @@
 import Foundation
 @testable import SpotifyLyricsCore
 
+
 @MainActor
 func testSeekBarFormatting() {
     print("--- SeekBar Formatting Tests ---")

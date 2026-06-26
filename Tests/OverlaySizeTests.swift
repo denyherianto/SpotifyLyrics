@@ -1,5 +1,6 @@
 @testable import SpotifyLyricsCore
 
+
 @MainActor
 func testOverlaySize() {
     print("--- OverlaySize Tests ---")

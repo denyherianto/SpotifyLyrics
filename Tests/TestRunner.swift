@@ -1,14 +1,10 @@
 import Foundation
 @testable import SpotifyLyricsCore
 
-@MainActor
-var passed = 0
-@MainActor
-var failed = 0
-@MainActor
-var failures: [(String, String)] = []
+nonisolated(unsafe) var passed = 0
+nonisolated(unsafe) var failed = 0
+nonisolated(unsafe) var failures: [(String, String)] = []
 
-@MainActor
 func check(_ condition: Bool, _ message: String = "", file: String = #file, line: Int = #line) {
     if condition {
         passed += 1
@@ -19,7 +15,6 @@ func check(_ condition: Bool, _ message: String = "", file: String = #file, line
     }
 }
 
-@MainActor
 func checkEqual<T: Equatable>(_ a: T, _ b: T, _ message: String = "", file: String = #file, line: Int = #line) {
     if a == b {
         passed += 1
@@ -30,7 +25,6 @@ func checkEqual<T: Equatable>(_ a: T, _ b: T, _ message: String = "", file: Stri
     }
 }
 
-@MainActor
 func checkApprox(_ a: Double, _ b: Double, accuracy: Double = 0.01, file: String = #file, line: Int = #line) {
     if abs(a - b) < accuracy {
         passed += 1
@@ -42,8 +36,9 @@ func checkApprox(_ a: Double, _ b: Double, accuracy: Double = 0.01, file: String
 
 @main
 struct TestMain {
-    @MainActor
-    static func main() {
+    static func main() async {
+        setbuf(stdout, nil)
+        await MainActor.run {
         print("Running SpotifyLyrics Tests...\n")
 
         testLRCParser()
@@ -56,6 +51,7 @@ struct TestMain {
         testSeekBarFormatting()
         testMenuBarTrackInfo()
         testAnimationMode()
+        testEnrichment()
 
         print("\n========================================")
         if failures.isEmpty {
@@ -69,8 +65,8 @@ struct TestMain {
         }
         print("========================================\n")
 
-        if failed > 0 {
-            exit(1)
+        fflush(stdout)
         }
+        exit(failed > 0 ? 1 : 0)
     }
 }

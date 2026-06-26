@@ -1,5 +1,6 @@
 @testable import SpotifyLyricsCore
 
+
 @MainActor
 func testParseNumber() {
     print("--- Parse Number Tests ---")

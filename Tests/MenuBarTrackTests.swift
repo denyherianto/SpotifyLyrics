@@ -1,6 +1,7 @@
 import Foundation
 @testable import SpotifyLyricsCore
 
+
 @MainActor
 func testMenuBarTrackInfo() {
     print("--- Menu Bar Track Info Tests ---")

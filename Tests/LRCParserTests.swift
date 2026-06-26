@@ -1,5 +1,6 @@
 @testable import SpotifyLyricsCore
 
+
 @MainActor
 func testLRCParser() {
     print("--- LRC Parser Tests ---")

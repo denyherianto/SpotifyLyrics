@@ -40,6 +40,15 @@ final class OverlayController: ObservableObject {
     @Published var animationMode: AnimationMode = .karaoke {
         didSet { UserDefaults.standard.set(animationMode.rawValue, forKey: "animationMode") }
     }
+    @Published var showRomanization: Bool = false {
+        didSet { UserDefaults.standard.set(showRomanization, forKey: "showRomanization") }
+    }
+    @Published var showTranslation: Bool = false {
+        didSet { UserDefaults.standard.set(showTranslation, forKey: "showTranslation") }
+    }
+    @Published var targetLanguage: TranslationLanguage = .indonesian {
+        didSet { UserDefaults.standard.set(targetLanguage.rawValue, forKey: "targetLanguage") }
+    }
 
     let overlayWindow = LyricsOverlayWindow()
 
@@ -65,6 +74,16 @@ final class OverlayController: ObservableObject {
         if let saved = defaults.string(forKey: "animationMode"),
            let mode = AnimationMode(rawValue: saved) {
             self._animationMode = Published(initialValue: mode)
+        }
+        if defaults.object(forKey: "showRomanization") != nil {
+            self._showRomanization = Published(initialValue: defaults.bool(forKey: "showRomanization"))
+        }
+        if defaults.object(forKey: "showTranslation") != nil {
+            self._showTranslation = Published(initialValue: defaults.bool(forKey: "showTranslation"))
+        }
+        if let saved = defaults.string(forKey: "targetLanguage"),
+           let lang = TranslationLanguage(rawValue: saved) {
+            self._targetLanguage = Published(initialValue: lang)
         }
     }
 
@@ -113,6 +132,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             lyricsManager: lyricsManager,
             overlayController: overlayController
         )
+
+        // Sync enrichment settings to LyricsManager
+        lyricsManager.showRomanization = overlayController.showRomanization
+        lyricsManager.showTranslation = overlayController.showTranslation
+        lyricsManager.targetLanguage = overlayController.targetLanguage.rawValue
+
+        overlayController.$showRomanization
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] value in
+                guard let self else { return }
+                self.lyricsManager.showRomanization = value
+                self.lyricsManager.refreshEnrichment()
+            }
+            .store(in: &cancellables)
+
+        overlayController.$showTranslation
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] value in
+                guard let self else { return }
+                self.lyricsManager.showTranslation = value
+                self.lyricsManager.refreshEnrichment()
+            }
+            .store(in: &cancellables)
+
+        overlayController.$targetLanguage
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] value in
+                guard let self else { return }
+                self.lyricsManager.targetLanguage = value.rawValue
+                if self.lyricsManager.showTranslation {
+                    self.lyricsManager.refreshEnrichment()
+                }
+            }
+            .store(in: &cancellables)
 
         playerManager.onTrackChanged = { [weak self] track in
             guard let self else { return }

@@ -160,6 +160,7 @@ public struct LyricsOverlayView: View {
     @ViewBuilder
     private func lineView(index: Int, line: LyricLine) -> some View {
         let isActive = index == lyricsManager.currentLineIndex
+        let lineEnrichment = lyricsManager.enrichment[index]
         if isActive && (animationMode == .karaoke || animationMode == .glow) {
             TimelineView(.animation) { _ in
                 LyricLineView(
@@ -168,7 +169,8 @@ public struct LyricsOverlayView: View {
                     offset: 0,
                     mode: animationMode,
                     position: playerManager.playbackPosition,
-                    lineEnd: lineEnd(at: index)
+                    lineEnd: lineEnd(at: index),
+                    enrichment: lineEnrichment
                 )
             }
         } else {
@@ -178,7 +180,8 @@ public struct LyricsOverlayView: View {
                 offset: index - lyricsManager.currentLineIndex,
                 mode: animationMode,
                 position: playerManager.playbackPosition,
-                lineEnd: lineEnd(at: index)
+                lineEnd: lineEnd(at: index),
+                enrichment: lineEnrichment
             )
         }
     }

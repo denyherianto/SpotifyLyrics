@@ -216,6 +216,31 @@ struct MenuBarView: View {
                         .controlSize(.small)
                         .labelsHidden()
                 }
+                settingsRow("Romanization") {
+                    Toggle("", isOn: $overlayController.showRomanization)
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                        .labelsHidden()
+                }
+                settingsRow("Translation") {
+                    Toggle("", isOn: $overlayController.showTranslation)
+                        .toggleStyle(.switch)
+                        .controlSize(.small)
+                        .labelsHidden()
+                }
+                if overlayController.showTranslation {
+                    settingsRow("Language") {
+                        Picker("", selection: $overlayController.targetLanguage) {
+                            ForEach(TranslationLanguage.allCases, id: \.self) { lang in
+                                Text(lang.displayName).tag(lang)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        .controlSize(.small)
+                        .frame(maxWidth: 120)
+                    }
+                }
             }
 
             Divider()
