@@ -47,6 +47,12 @@ public final class SpotifyPlayerManager: ObservableObject {
     }
 
     private func poll() {
+        // Capture wall-clock time BEFORE the AppleScript call so the timestamp
+        // aligns with when Spotify actually sampled its player position.
+        // AppleScript IPC takes ~50-200ms; recording time after the call would
+        // make the interpolated position lag behind by that roundtrip duration.
+        let pollStart = CFAbsoluteTimeGetCurrent()
+
         // Single AppleScript call that also detects if Spotify is not running
         guard let info = bridge.getPlaybackInfo() else {
             isSpotifyRunning = false
@@ -60,7 +66,7 @@ public final class SpotifyPlayerManager: ObservableObject {
         isSpotifyRunning = true
         playerState = info.state
         lastPolledPosition = info.position
-        lastPollTime = CFAbsoluteTimeGetCurrent()
+        lastPollTime = pollStart
         isShuffling = info.isShuffling
         isRepeating = info.isRepeating
 
@@ -106,6 +112,12 @@ public final class SpotifyPlayerManager: ObservableObject {
         let newValue = !isRepeating
         bridge.setRepeating(newValue)
         isRepeating = newValue
+    }
+
+    /// Test helper: directly set interpolation state without polling Spotify.
+    public func setInterpolationState(position: TimeInterval, pollTime: CFAbsoluteTime) {
+        lastPolledPosition = position
+        lastPollTime = pollTime
     }
 
     deinit {

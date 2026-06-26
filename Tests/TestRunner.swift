@@ -53,6 +53,7 @@ struct TestMain {
         testAnimationMode()
         testEnrichment()
         testOverlayTrackInfo()
+        testPlaybackInterpolation()
 
         print("\n========================================")
         if failures.isEmpty {
