@@ -8,7 +8,7 @@ let package = Package(
         .target(
             name: "SpotifyLyricsCore",
             path: "Sources/SpotifyLyricsCore",
-            swiftSettings: [.swiftLanguageMode(.v5)]
+            swiftSettings: [.swiftLanguageMode(.v5), .unsafeFlags(["-enable-testing"])]
         ),
         .executableTarget(
             name: "SpotifyLyrics",

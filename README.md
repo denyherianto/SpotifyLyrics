@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="Assets/mascot.svg" width="200" alt="SpotifyLyrics Mascot"/>
+  <img src="Assets/mascot.svg" width="200" alt="Spotify Lyrics Mascot"/>
 </p>
 
-<h1 align="center">SpotifyLyrics</h1>
+<h1 align="center">Spotify Lyrics</h1>
 
 <p align="center">
   <strong>Karaoke-style lyrics overlay for Spotify on macOS</strong>
@@ -42,8 +42,8 @@ A lightweight macOS menu bar app that displays synced lyrics at the bottom of yo
 ### Build from source
 
 ```bash
-git clone https://github.com/denyherianto/spotify-lyrics.git
-cd spotify-lyrics
+git clone https://github.com/denyherianto/SpotifyLyrics.git
+cd SpotifyLyrics
 swift build -c release
 ```
 
@@ -60,7 +60,7 @@ On first launch, macOS will ask for **Automation permission** to control Spotify
 ## Usage
 
 1. **Start Spotify** and play a song
-2. **Run SpotifyLyrics** — lyrics appear at the bottom of your screen
+2. **Run Spotify Lyrics** — lyrics appear at the bottom of your screen
 3. **Menu bar icon** (♪) gives you controls:
    - Show/Hide lyrics overlay
    - Always on Top toggle
