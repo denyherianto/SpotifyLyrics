@@ -146,12 +146,14 @@ struct MenuBarView: View {
 
                         Spacer().frame(height: 16)
 
-                        // Song title
-                        Text(track.title)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.white)
-                            .lineLimit(1)
-                            .shadow(color: .black.opacity(0.5), radius: 4, y: 1)
+                        // Song title (marquee for long names)
+                        MarqueeText(
+                            text: track.title,
+                            font: .system(size: 14, weight: .semibold),
+                            spacing: 30,
+                            speed: 30
+                        )
+                        .padding(.horizontal, 20)
 
                         Spacer()
 
