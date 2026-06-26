@@ -88,4 +88,28 @@ func testLRCParser() {
         checkApprox(lines[0].timestamp, 330.0)
         print("  ✓ High timestamp")
     }
+
+    // Standard LRC has no per-word timings
+    do {
+        let lines = LRCParser.parse("[00:12.50] Hello world")
+        check(lines[0].words == nil, "standard: no words")
+        print("  ✓ Standard LRC has no word timings")
+    }
+
+    // Enhanced-LRC inline word timing
+    do {
+        let lines = LRCParser.parse("[00:10.00]<00:10.00>Hi <00:10.40>there")
+        checkEqual(lines.count, 1, "enhanced: count")
+        checkEqual(lines[0].text, "Hi there", "enhanced: text")
+        checkApprox(lines[0].timestamp, 10.0)
+        check(lines[0].words != nil, "enhanced: has words")
+        checkEqual(lines[0].words?.count, 2, "enhanced: word count")
+        if let words = lines[0].words {
+            checkApprox(words[0].start, 10.0)
+            checkApprox(words[0].end, 10.4)
+            checkEqual(words[0].text.trimmingCharacters(in: .whitespaces), "Hi", "enhanced: word0 text")
+            checkApprox(words[1].start, 10.4)
+        }
+        print("  ✓ Enhanced-LRC word timing")
+    }
 }

@@ -55,6 +55,7 @@ struct TestMain {
         testSettingsPersistence()
         testSeekBarFormatting()
         testMenuBarTrackInfo()
+        testAnimationMode()
 
         print("\n========================================")
         if failures.isEmpty {

@@ -1,27 +1,32 @@
 import SwiftUI
 
 public struct LyricLineView: View {
-    public let text: String
+    public let line: LyricLine
     public let isActive: Bool
     public let offset: Int
+    public let mode: AnimationMode
+    /// Live playback position; only meaningful for the active line (karaoke/glow).
+    public let position: TimeInterval
+    /// Effective end time of this line, used for the karaoke sweep.
+    public let lineEnd: TimeInterval
 
-    public init(text: String, isActive: Bool, offset: Int) {
-        self.text = text
+    public init(line: LyricLine, isActive: Bool, offset: Int, mode: AnimationMode, position: TimeInterval, lineEnd: TimeInterval) {
+        self.line = line
         self.isActive = isActive
         self.offset = offset
+        self.mode = mode
+        self.position = position
+        self.lineEnd = lineEnd
     }
 
     @State private var isHovered = false
 
     public var body: some View {
-        Text(text)
-            .font(.system(size: fontSize, weight: isActive ? .bold : .regular, design: .rounded))
-            .multilineTextAlignment(isActive ? .center : .center)
+        content
+            .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity, alignment: .center)
-            .foregroundStyle(foregroundColor)
             .opacity(lineOpacity)
-            .scaleEffect(isActive ? 1.0 : 0.95)
-            .shadow(color: .black.opacity(0.5), radius: isActive ? 4 : 2, x: 0, y: 1)
+            .scaleEffect(scale)
             .padding(.vertical, 2)
             .padding(.horizontal, 8)
             .background(
@@ -36,12 +41,56 @@ public struct LyricLineView: View {
                     NSCursor.pop()
                 }
             }
-            .animation(.easeInOut(duration: 0.3), value: isActive)
+            .animation(mode.transition, value: isActive)
             .animation(.easeInOut(duration: 0.15), value: isHovered)
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if isActive && mode == .karaoke {
+            karaokeText
+        } else if isActive && mode == .glow {
+            glowText
+        } else {
+            baseText(foregroundColor)
+        }
+    }
+
+    private func baseText(_ color: Color) -> some View {
+        Text(line.text)
+            .font(.system(size: fontSize, weight: isActive ? .bold : .regular, design: .rounded))
+            .foregroundStyle(color)
+            .shadow(color: .black.opacity(0.5), radius: isActive ? 4 : 2, x: 0, y: 1)
+    }
+
+    /// Japanese-karaoke fill: a dim base with a bright copy revealed left-to-right.
+    private var karaokeText: some View {
+        let fraction = line.fillFraction(at: position, lineEnd: lineEnd)
+        return baseText(.white.opacity(0.4))
+            .overlay(alignment: .leading) {
+                baseText(.white)
+                    .mask(alignment: .leading) {
+                        GeometryReader { geo in
+                            Rectangle().frame(width: geo.size.width * fraction)
+                        }
+                    }
+            }
+    }
+
+    /// Calm pulsing glow driven by the playback position.
+    private var glowText: some View {
+        let pulse = (sin(position * 3) + 1) / 2 // 0…1
+        return baseText(.white)
+            .shadow(color: .white.opacity(0.25 + 0.45 * pulse), radius: 3 + 9 * pulse)
     }
 
     private var fontSize: CGFloat {
         isActive ? 24 : 18
+    }
+
+    private var scale: CGFloat {
+        guard isActive else { return 0.95 }
+        return mode == .spring ? 1.06 : 1.0
     }
 
     private var foregroundColor: Color {
