@@ -3,6 +3,7 @@ import SwiftUI
 
 public final class LyricsOverlayWindow {
     private var panel: NSPanel?
+    private var currentSize: OverlaySize = .medium
 
     public var isVisible: Bool {
         panel?.isVisible ?? false
@@ -11,6 +12,8 @@ public final class LyricsOverlayWindow {
     public init() {}
 
     public func show(with view: some View, size: OverlaySize = .medium) {
+        currentSize = size
+
         if panel != nil {
             panel?.orderFront(nil)
             return
@@ -48,12 +51,38 @@ public final class LyricsOverlayWindow {
         hostingView.autoresizingMask = [.width, .height]
         panel.contentView?.addSubview(hostingView)
 
-        // Restore saved position
-        panel.setFrameUsingName("LyricsOverlay")
-        panel.setFrameAutosaveName("LyricsOverlay")
+        let frameName = size.isMini ? "LyricsOverlayMini" : "LyricsOverlay"
+        panel.setFrameUsingName(frameName)
+        panel.setFrameAutosaveName(frameName)
 
         panel.orderFront(nil)
         self.panel = panel
+    }
+
+    /// Replace the panel content with a new view (used when switching between full/mini modes).
+    public func replaceContent(with view: some View, size: OverlaySize) {
+        currentSize = size
+        guard let panel else { return }
+
+        // Remove old hosting view
+        panel.contentView?.subviews.forEach { $0.removeFromSuperview() }
+
+        // Resize
+        let (width, height) = size.dimensions
+        let currentFrame = panel.frame
+        let newX = currentFrame.midX - width / 2
+        let newY = currentFrame.midY - height / 2
+        panel.setFrame(NSRect(x: newX, y: newY, width: width, height: height), display: true, animate: true)
+
+        // Set frame autosave for the new mode
+        let frameName = size.isMini ? "LyricsOverlayMini" : "LyricsOverlay"
+        panel.setFrameAutosaveName(frameName)
+
+        // Insert new hosting view
+        let hostingView = NSHostingView(rootView: view)
+        hostingView.frame = panel.contentView?.bounds ?? .zero
+        hostingView.autoresizingMask = [.width, .height]
+        panel.contentView?.addSubview(hostingView)
     }
 
     public func showIfCreated() {

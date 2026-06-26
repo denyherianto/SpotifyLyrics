@@ -25,10 +25,20 @@ final class OverlayController: ObservableObject {
     }
     @Published var overlayOpacity: Double = 0.9
     private var opacitySaveTask: DispatchWorkItem?
+    /// Remembers the last non-mini size so we can restore it when leaving mini mode.
+    private var lastFullSize: OverlaySize = .medium
     @Published var overlaySize: OverlaySize = .medium {
         didSet {
-            overlayWindow.resize(to: overlaySize)
             UserDefaults.standard.set(overlaySize.rawValue, forKey: "overlaySize")
+            // Switching between mini ↔ full requires replacing the view, not just resizing
+            if oldValue.isMini != overlaySize.isMini {
+                switchOverlayMode?()
+            } else {
+                overlayWindow.resize(to: overlaySize)
+            }
+            if !overlaySize.isMini {
+                lastFullSize = overlaySize
+            }
         }
     }
     @Published var animationMode: AnimationMode = .karaoke {
@@ -44,6 +54,19 @@ final class OverlayController: ObservableObject {
         didSet { UserDefaults.standard.set(targetLanguage.rawValue, forKey: "targetLanguage") }
     }
     let overlayWindow = LyricsOverlayWindow()
+
+    /// Callback set by AppDelegate to rebuild the overlay when switching mini ↔ full.
+    var switchOverlayMode: (() -> Void)?
+
+    /// Switch to mini mode, or back to the last full size.
+    func toggleMiniMode() {
+        if overlaySize.isMini {
+            overlaySize = lastFullSize
+        } else {
+            lastFullSize = overlaySize
+            overlaySize = .mini
+        }
+    }
 
     /// Debounced opacity persistence — avoids disk I/O on every slider frame.
     func commitOpacity() {
@@ -62,6 +85,9 @@ final class OverlayController: ObservableObject {
         if let saved = defaults.string(forKey: "overlaySize"),
            let size = OverlaySize(rawValue: saved) {
             self._overlaySize = Published(initialValue: size)
+            if !size.isMini {
+                self.lastFullSize = size
+            }
         }
         if defaults.object(forKey: "overlayOpacity") != nil {
             self._overlayOpacity = Published(initialValue: defaults.double(forKey: "overlayOpacity"))
@@ -89,6 +115,14 @@ final class OverlayController: ObservableObject {
     }
 
     func show(lyricsManager: LyricsManager, playerManager: SpotifyPlayerManager) {
+        if overlaySize.isMini {
+            showMini(lyricsManager: lyricsManager, playerManager: playerManager)
+        } else {
+            showFull(lyricsManager: lyricsManager, playerManager: playerManager)
+        }
+    }
+
+    private func showFull(lyricsManager: LyricsManager, playerManager: SpotifyPlayerManager) {
         let opacityBinding = Binding<Double>(
             get: { [weak self] in self?.overlayOpacity ?? 0.9 },
             set: { [weak self] in self?.overlayOpacity = $0 }
@@ -102,6 +136,71 @@ final class OverlayController: ObservableObject {
         })
         overlayWindow.show(with: view, size: overlaySize)
         isVisible = true
+    }
+
+    private func showMini(lyricsManager: LyricsManager, playerManager: SpotifyPlayerManager) {
+        let opacityBinding = Binding<Double>(
+            get: { [weak self] in self?.overlayOpacity ?? 0.9 },
+            set: { [weak self] in self?.overlayOpacity = $0 }
+        )
+        let animationModeBinding = Binding<AnimationMode>(
+            get: { [weak self] in self?.animationMode ?? .karaoke },
+            set: { [weak self] in self?.animationMode = $0 }
+        )
+        let view = MiniOverlayView(
+            lyricsManager: lyricsManager,
+            playerManager: playerManager,
+            backgroundOpacity: opacityBinding,
+            animationMode: animationModeBinding,
+            onSwitchToFull: { [weak self] in
+                self?.toggleMiniMode()
+            },
+            onClose: { [weak self] in
+                self?.hide()
+            }
+        )
+        overlayWindow.show(with: view, size: .mini)
+        isVisible = true
+    }
+
+    /// Rebuild the overlay with the correct view type after switching mini ↔ full.
+    func rebuildOverlay(lyricsManager: LyricsManager, playerManager: SpotifyPlayerManager) {
+        if overlaySize.isMini {
+            let opacityBinding = Binding<Double>(
+                get: { [weak self] in self?.overlayOpacity ?? 0.9 },
+                set: { [weak self] in self?.overlayOpacity = $0 }
+            )
+            let animationModeBinding = Binding<AnimationMode>(
+                get: { [weak self] in self?.animationMode ?? .karaoke },
+                set: { [weak self] in self?.animationMode = $0 }
+            )
+            let view = MiniOverlayView(
+                lyricsManager: lyricsManager,
+                playerManager: playerManager,
+                backgroundOpacity: opacityBinding,
+                animationMode: animationModeBinding,
+                onSwitchToFull: { [weak self] in
+                    self?.toggleMiniMode()
+                },
+                onClose: { [weak self] in
+                    self?.hide()
+                }
+            )
+            overlayWindow.replaceContent(with: view, size: .mini)
+        } else {
+            let opacityBinding = Binding<Double>(
+                get: { [weak self] in self?.overlayOpacity ?? 0.9 },
+                set: { [weak self] in self?.overlayOpacity = $0 }
+            )
+            let animationModeBinding = Binding<AnimationMode>(
+                get: { [weak self] in self?.animationMode ?? .karaoke },
+                set: { [weak self] in self?.animationMode = $0 }
+            )
+            let view = LyricsOverlayView(lyricsManager: lyricsManager, playerManager: playerManager, backgroundOpacity: opacityBinding, animationMode: animationModeBinding, onClose: { [weak self] in
+                self?.hide()
+            })
+            overlayWindow.replaceContent(with: view, size: overlaySize)
+        }
     }
 
     func toggle() {
@@ -175,6 +274,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
             .store(in: &cancellables)
+
+        // Wire up mini ↔ full switching callback
+        overlayController.switchOverlayMode = { [weak self] in
+            guard let self else { return }
+            self.overlayController.rebuildOverlay(
+                lyricsManager: self.lyricsManager,
+                playerManager: self.playerManager
+            )
+        }
 
         playerManager.onTrackChanged = { [weak self] track in
             guard let self else { return }

@@ -5,6 +5,18 @@
 func testOverlaySize() {
     print("--- OverlaySize Tests ---")
 
+    // Mini dimensions
+    do {
+        let size = OverlaySize.mini
+        let (w, h) = size.dimensions
+        checkApprox(Double(w), 600.0, accuracy: 0.1)
+        checkApprox(Double(h), 48.0, accuracy: 0.1)
+        checkEqual(size.displayName, "Mini", "mini name")
+        checkEqual(size.rawValue, "mini", "mini raw")
+        check(size.isMini, "mini isMini")
+        print("  ✓ Mini dimensions")
+    }
+
     // Small dimensions
     do {
         let size = OverlaySize.small
@@ -41,7 +53,7 @@ func testOverlaySize() {
     // All cases
     do {
         let all = OverlaySize.allCases
-        checkEqual(all.count, 3, "allCases count")
+        checkEqual(all.count, 4, "allCases count")
         print("  ✓ All cases count")
     }
 
