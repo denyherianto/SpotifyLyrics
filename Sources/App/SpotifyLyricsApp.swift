@@ -37,6 +37,9 @@ final class OverlayController: ObservableObject {
     @Published var showMenuBarTrackInfo: Bool = true {
         didSet { UserDefaults.standard.set(showMenuBarTrackInfo, forKey: "showMenuBarTrackInfo") }
     }
+    @Published var animationMode: AnimationMode = .karaoke {
+        didSet { UserDefaults.standard.set(animationMode.rawValue, forKey: "animationMode") }
+    }
 
     let overlayWindow = LyricsOverlayWindow()
 
@@ -59,6 +62,10 @@ final class OverlayController: ObservableObject {
         if defaults.object(forKey: "showMenuBarTrackInfo") != nil {
             self._showMenuBarTrackInfo = Published(initialValue: defaults.bool(forKey: "showMenuBarTrackInfo"))
         }
+        if let saved = defaults.string(forKey: "animationMode"),
+           let mode = AnimationMode(rawValue: saved) {
+            self._animationMode = Published(initialValue: mode)
+        }
     }
 
     func show(lyricsManager: LyricsManager, playerManager: SpotifyPlayerManager) {
@@ -66,7 +73,11 @@ final class OverlayController: ObservableObject {
             get: { [weak self] in self?.overlayOpacity ?? 0.9 },
             set: { [weak self] in self?.overlayOpacity = $0 }
         )
-        let view = LyricsOverlayView(lyricsManager: lyricsManager, playerManager: playerManager, backgroundOpacity: opacityBinding, onClose: { [weak self] in
+        let animationModeBinding = Binding<AnimationMode>(
+            get: { [weak self] in self?.animationMode ?? .karaoke },
+            set: { [weak self] in self?.animationMode = $0 }
+        )
+        let view = LyricsOverlayView(lyricsManager: lyricsManager, playerManager: playerManager, backgroundOpacity: opacityBinding, animationMode: animationModeBinding, onClose: { [weak self] in
             self?.hide()
         })
         overlayWindow.show(with: view, size: overlaySize)

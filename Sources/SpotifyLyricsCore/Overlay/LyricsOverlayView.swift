@@ -5,12 +5,14 @@ public struct LyricsOverlayView: View {
     @ObservedObject var lyricsManager: LyricsManager
     @ObservedObject var playerManager: SpotifyPlayerManager
     @Binding var backgroundOpacity: Double
+    @Binding var animationMode: AnimationMode
     var onClose: (() -> Void)?
 
-    public init(lyricsManager: LyricsManager, playerManager: SpotifyPlayerManager, backgroundOpacity: Binding<Double> = .constant(0.85), onClose: (() -> Void)? = nil) {
+    public init(lyricsManager: LyricsManager, playerManager: SpotifyPlayerManager, backgroundOpacity: Binding<Double> = .constant(0.85), animationMode: Binding<AnimationMode> = .constant(.karaoke), onClose: (() -> Void)? = nil) {
         self.lyricsManager = lyricsManager
         self.playerManager = playerManager
         self._backgroundOpacity = backgroundOpacity
+        self._animationMode = animationMode
         self.onClose = onClose
     }
 
@@ -95,7 +97,7 @@ public struct LyricsOverlayView: View {
         isManualScrolling = false
         if let proxy = scrollProxy {
             isAutoScrolling = true
-            withAnimation(.easeInOut(duration: 0.35)) {
+            withAnimation(animationMode.transition) {
                 proxy.scrollTo(lyricsManager.currentLineIndex, anchor: .center)
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -111,19 +113,15 @@ public struct LyricsOverlayView: View {
                     Spacer().frame(height: 60)
 
                     ForEach(Array(lyricsManager.currentLines.enumerated()), id: \.element.id) { index, line in
-                        LyricLineView(
-                            text: line.text,
-                            isActive: index == lyricsManager.currentLineIndex,
-                            offset: index - lyricsManager.currentLineIndex
-                        )
-                        .id(index)
-                        .frame(maxWidth: .infinity)
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            playerManager.seekTo(line.timestamp)
-                            lyricsManager.updateCurrentLine(at: line.timestamp)
-                            isManualScrolling = false
-                        }
+                        lineView(index: index, line: line)
+                            .id(index)
+                            .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                playerManager.seekTo(line.timestamp)
+                                lyricsManager.updateCurrentLine(at: line.timestamp)
+                                isManualScrolling = false
+                            }
                     }
 
                     Spacer().frame(height: 60)
@@ -143,7 +141,7 @@ public struct LyricsOverlayView: View {
             .onChange(of: lyricsManager.currentLineIndex) { newIndex in
                 guard !isManualScrolling else { return }
                 isAutoScrolling = true
-                withAnimation(.easeInOut(duration: 0.35)) {
+                withAnimation(animationMode.transition) {
                     proxy.scrollTo(newIndex, anchor: .center)
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -155,6 +153,43 @@ public struct LyricsOverlayView: View {
                 isManualScrolling = true
             }
         }
+    }
+
+    /// Builds a line view. The active line is wrapped in a per-frame TimelineView
+    /// for the karaoke fill and glow pulse; other lines render statically.
+    @ViewBuilder
+    private func lineView(index: Int, line: LyricLine) -> some View {
+        let isActive = index == lyricsManager.currentLineIndex
+        if isActive && (animationMode == .karaoke || animationMode == .glow) {
+            TimelineView(.animation) { _ in
+                LyricLineView(
+                    line: line,
+                    isActive: true,
+                    offset: 0,
+                    mode: animationMode,
+                    position: playerManager.playbackPosition,
+                    lineEnd: lineEnd(at: index)
+                )
+            }
+        } else {
+            LyricLineView(
+                line: line,
+                isActive: isActive,
+                offset: index - lyricsManager.currentLineIndex,
+                mode: animationMode,
+                position: playerManager.playbackPosition,
+                lineEnd: lineEnd(at: index)
+            )
+        }
+    }
+
+    /// Effective end time for a line: its own end, else the next line's start.
+    private func lineEnd(at index: Int) -> TimeInterval {
+        let lines = lyricsManager.currentLines
+        guard index < lines.count else { return 0 }
+        if let end = lines[index].endTime { return end }
+        if index + 1 < lines.count { return lines[index + 1].timestamp }
+        return lines[index].timestamp + 5
     }
 
     private func statusView(_ message: String) -> some View {

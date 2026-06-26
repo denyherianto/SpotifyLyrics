@@ -241,6 +241,19 @@ struct MenuBarView: View {
                 .controlSize(.small)
             }
 
+            // Animation
+            settingsRow("Animation") {
+                Picker("", selection: $overlayController.animationMode) {
+                    ForEach(AnimationMode.allCases, id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                .controlSize(.small)
+                .frame(maxWidth: 120)
+            }
+
             Divider()
 
             // Quit
