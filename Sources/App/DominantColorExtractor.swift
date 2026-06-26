@@ -1,23 +1,44 @@
 import SwiftUI
 import AppKit
+import SpotifyLyricsCore
 
 @MainActor
 final class DominantColorExtractor: ObservableObject {
     @Published var dominantColor: Color = .white
+    @Published var accentColor: Color = .gray
+    @Published var backgroundColor: Color = .black
+    @Published var albumText: [String] = []
 
+    private let visionAnalyzer = VisionAnalyzer()
     private var cachedURL: URL?
 
     func extractColor(from url: URL?) {
         guard let url, url != cachedURL else { return }
         cachedURL = url
 
-        Task.detached(priority: .userInitiated) {
-            guard let color = DominantColorExtractor.computeAverageColor(from: url) else { return }
-            await MainActor.run {
+        // Use Vision-based analysis for rich palette
+        visionAnalyzer.analyze(imageURL: url)
+
+        // Observe Vision results
+        Task { @MainActor in
+            // Give Vision a moment to process
+            try? await Task.sleep(nanoseconds: 500_000_000)
+
+            if let palette = self.visionAnalyzer.palette {
+                withAnimation(.easeInOut(duration: 0.5)) {
+                    self.dominantColor = Color(nsColor: palette.dominant)
+                    self.accentColor = Color(nsColor: palette.accent)
+                    self.backgroundColor = Color(nsColor: palette.background)
+                }
+            } else {
+                // Fallback to simple average color
+                guard let color = DominantColorExtractor.computeAverageColor(from: url) else { return }
                 withAnimation(.easeInOut(duration: 0.5)) {
                     self.dominantColor = Color(nsColor: color)
                 }
             }
+
+            self.albumText = self.visionAnalyzer.detectedText
         }
     }
 
@@ -27,7 +48,6 @@ final class DominantColorExtractor: ObservableObject {
               let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
         else { return nil }
 
-        // Scale down to 1x1 pixel to get average color
         let width = 1
         let height = 1
         let colorSpace = CGColorSpaceCreateDeviceRGB()
@@ -49,7 +69,6 @@ final class DominantColorExtractor: ObservableObject {
         let g = CGFloat(pixel[1]) / 255.0
         let b = CGFloat(pixel[2]) / 255.0
 
-        // Brighten the color so it's visible against dark backgrounds
         let nsColor = NSColor(red: r, green: g, blue: b, alpha: 1.0)
         var hue: CGFloat = 0
         var saturation: CGFloat = 0
@@ -57,7 +76,6 @@ final class DominantColorExtractor: ObservableObject {
         var alpha: CGFloat = 0
         nsColor.getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha)
 
-        // Ensure minimum brightness for visibility
         let adjustedBrightness = max(brightness, 0.6)
         let adjustedSaturation = min(saturation * 1.2, 1.0)
 

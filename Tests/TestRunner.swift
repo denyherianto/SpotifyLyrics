@@ -49,7 +49,6 @@ struct TestMain {
         testOverlaySize()
         testSettingsPersistence()
         testSeekBarFormatting()
-        testMenuBarTrackInfo()
         testAnimationMode()
         testEnrichment()
         testOverlayTrackInfo()

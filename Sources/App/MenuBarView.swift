@@ -26,9 +26,11 @@ struct MenuBarView: View {
     @EnvironmentObject var playerManager: SpotifyPlayerManager
     @EnvironmentObject var lyricsManager: LyricsManager
     @EnvironmentObject var overlayController: OverlayController
+    @EnvironmentObject var soundClassifier: SoundClassifier
 
     @StateObject private var colorExtractor = DominantColorExtractor()
     @State private var isHovering = false
+    @State private var isSettingsExpanded = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -146,14 +148,13 @@ struct MenuBarView: View {
 
                         Spacer().frame(height: 16)
 
-                        // Song title (marquee for long names)
-                        MarqueeText(
-                            text: track.title,
-                            font: .system(size: 14, weight: .semibold),
-                            spacing: 30,
-                            speed: 30
-                        )
-                        .padding(.horizontal, 20)
+                        // Song title
+                        Text(track.title)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .shadow(color: .black.opacity(0.5), radius: 4, y: 1)
+                            .padding(.horizontal, 20)
 
                         Spacer()
 
@@ -193,99 +194,124 @@ struct MenuBarView: View {
 
     private var settingsSection: some View {
         VStack(spacing: 10) {
-            // Toggles
-            VStack(spacing: 6) {
-                settingsRow("Show Lyrics") {
-                    Toggle("", isOn: Binding(
-                        get: { overlayController.isVisible },
-                        set: { _ in overlayController.toggle() }
-                    ))
-                    .toggleStyle(.switch)
-                    .controlSize(.small)
-                    .labelsHidden()
-                }
-                settingsRow("Always on Top") {
-                    Toggle("", isOn: $overlayController.alwaysOnTop)
+            if isSettingsExpanded {
+                // Toggles
+                VStack(spacing: 6) {
+                    settingsRow("Show Lyrics") {
+                        Toggle("", isOn: Binding(
+                            get: { overlayController.isVisible },
+                            set: { _ in overlayController.toggle() }
+                        ))
                         .toggleStyle(.switch)
                         .controlSize(.small)
                         .labelsHidden()
-                }
-                settingsRow("Show Track") {
-                    Toggle("", isOn: $overlayController.showMenuBarTrackInfo)
-                        .toggleStyle(.switch)
-                        .controlSize(.small)
-                        .labelsHidden()
-                }
-                settingsRow("Romanization") {
-                    Toggle("", isOn: $overlayController.showRomanization)
-                        .toggleStyle(.switch)
-                        .controlSize(.small)
-                        .labelsHidden()
-                }
-                settingsRow("Translation") {
-                    Toggle("", isOn: $overlayController.showTranslation)
-                        .toggleStyle(.switch)
-                        .controlSize(.small)
-                        .labelsHidden()
-                }
-                if overlayController.showTranslation {
-                    settingsRow("Language") {
-                        Picker("", selection: $overlayController.targetLanguage) {
-                            ForEach(TranslationLanguage.allCases, id: \.self) { lang in
-                                Text(lang.displayName).tag(lang)
+                    }
+                    settingsRow("Always on Top") {
+                        Toggle("", isOn: $overlayController.alwaysOnTop)
+                            .toggleStyle(.switch)
+                            .controlSize(.small)
+                            .labelsHidden()
+                    }
+                    settingsRow("Romanization") {
+                        Toggle("", isOn: $overlayController.showRomanization)
+                            .toggleStyle(.switch)
+                            .controlSize(.small)
+                            .labelsHidden()
+                    }
+                    settingsRow("Translation") {
+                        Toggle("", isOn: $overlayController.showTranslation)
+                            .toggleStyle(.switch)
+                            .controlSize(.small)
+                            .labelsHidden()
+                    }
+                    if soundClassifier.currentMood != .unknown {
+                        settingsRow("Mood") {
+                            HStack(spacing: 4) {
+                                Circle()
+                                    .fill(Color(hue: soundClassifier.currentMood.themeHue, saturation: 0.7, brightness: 0.9))
+                                    .frame(width: 8, height: 8)
+                                Text(soundClassifier.currentMood.rawValue.capitalized)
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.tertiary)
                             }
                         }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
+                    }
+                    if overlayController.showTranslation {
+                        settingsRow("Language") {
+                            Picker("", selection: $overlayController.targetLanguage) {
+                                ForEach(TranslationLanguage.allCases, id: \.self) { lang in
+                                    Text(lang.displayName).tag(lang)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .labelsHidden()
+                            .controlSize(.small)
+                            .frame(maxWidth: 120)
+                        }
+                    }
+                }
+
+                Divider()
+
+                // Opacity
+                settingsRow("Opacity") {
+                    Slider(value: $overlayController.overlayOpacity, in: 0.3...1.0)
                         .controlSize(.small)
                         .frame(maxWidth: 120)
-                    }
+                    Text("\(Int(overlayController.overlayOpacity * 100))%")
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 32, alignment: .trailing)
                 }
-            }
 
-            Divider()
+                // Size
+                settingsRow("Size") {
+                    Picker("", selection: $overlayController.overlaySize) {
+                        ForEach(OverlaySize.allCases, id: \.self) { size in
+                            Text(size.displayName).tag(size)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .controlSize(.small)
+                }
 
-            // Opacity
-            settingsRow("Opacity") {
-                Slider(value: $overlayController.overlayOpacity, in: 0.3...1.0)
+                // Animation
+                settingsRow("Animation") {
+                    Picker("", selection: $overlayController.animationMode) {
+                        ForEach(AnimationMode.allCases, id: \.self) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
                     .controlSize(.small)
                     .frame(maxWidth: 120)
-                Text("\(Int(overlayController.overlayOpacity * 100))%")
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                    .frame(width: 32, alignment: .trailing)
-            }
-
-            // Size
-            settingsRow("Size") {
-                Picker("", selection: $overlayController.overlaySize) {
-                    ForEach(OverlaySize.allCases, id: \.self) { size in
-                        Text(size.displayName).tag(size)
-                    }
                 }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .controlSize(.small)
+
+                Divider()
             }
 
-            // Animation
-            settingsRow("Animation") {
-                Picker("", selection: $overlayController.animationMode) {
-                    ForEach(AnimationMode.allCases, id: \.self) { mode in
-                        Text(mode.displayName).tag(mode)
-                    }
-                }
-                .pickerStyle(.menu)
-                .labelsHidden()
-                .controlSize(.small)
-                .frame(maxWidth: 120)
-            }
-
-            Divider()
-
-            // Quit
+            // Bottom bar: Settings toggle + Exit
             HStack {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isSettingsExpanded.toggle()
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: "gearshape")
+                            .font(.system(size: 12))
+                        Image(systemName: "chevron.up")
+                            .font(.system(size: 9, weight: .semibold))
+                            .rotationEffect(.degrees(isSettingsExpanded ? 0 : 180))
+                    }
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+
                 Spacer()
+
                 Button {
                     NSApplication.shared.terminate(nil)
                 } label: {
@@ -314,4 +340,5 @@ struct MenuBarView: View {
             content()
         }
     }
+
 }

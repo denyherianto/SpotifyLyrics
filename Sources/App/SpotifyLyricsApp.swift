@@ -34,9 +34,6 @@ final class OverlayController: ObservableObject {
             UserDefaults.standard.set(overlaySize.rawValue, forKey: "overlaySize")
         }
     }
-    @Published var showMenuBarTrackInfo: Bool = true {
-        didSet { UserDefaults.standard.set(showMenuBarTrackInfo, forKey: "showMenuBarTrackInfo") }
-    }
     @Published var animationMode: AnimationMode = .karaoke {
         didSet { UserDefaults.standard.set(animationMode.rawValue, forKey: "animationMode") }
     }
@@ -49,7 +46,6 @@ final class OverlayController: ObservableObject {
     @Published var targetLanguage: TranslationLanguage = .indonesian {
         didSet { UserDefaults.standard.set(targetLanguage.rawValue, forKey: "targetLanguage") }
     }
-
     let overlayWindow = LyricsOverlayWindow()
 
     init() {
@@ -67,9 +63,6 @@ final class OverlayController: ObservableObject {
         }
         if defaults.object(forKey: "overlayVisible") != nil {
             self._isVisible = Published(initialValue: defaults.bool(forKey: "overlayVisible"))
-        }
-        if defaults.object(forKey: "showMenuBarTrackInfo") != nil {
-            self._showMenuBarTrackInfo = Published(initialValue: defaults.bool(forKey: "showMenuBarTrackInfo"))
         }
         if let saved = defaults.string(forKey: "animationMode"),
            let mode = AnimationMode(rawValue: saved) {
@@ -119,6 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let playerManager = SpotifyPlayerManager()
     let lyricsManager = LyricsManager()
     let overlayController = OverlayController()
+    let soundClassifier = SoundClassifier()
     private var statusBarController: StatusBarController?
     private var cancellables = Set<AnyCancellable>()
 
@@ -130,7 +124,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusBarController = StatusBarController(
             playerManager: playerManager,
             lyricsManager: lyricsManager,
-            overlayController: overlayController
+            overlayController: overlayController,
+            soundClassifier: soundClassifier
         )
 
         // Sync enrichment settings to LyricsManager

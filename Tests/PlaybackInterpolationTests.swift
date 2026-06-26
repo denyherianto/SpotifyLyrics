@@ -41,29 +41,34 @@ func testPlaybackInterpolation() {
         print("  ✓ Position freezes when stopped")
     }
 
-    // Pre-call timestamp alignment: simulates that pollTime is captured BEFORE
-    // the AppleScript call, so the interpolated position stays ahead rather than behind.
+    // Midpoint timestamp alignment: pollTime is the midpoint between call start
+    // and end, minimizing interpolation error in both directions.
     do {
         let now = CFAbsoluteTimeGetCurrent()
         let manager = SpotifyPlayerManager()
         manager.playerState = .playing
 
-        // Simulate correct behavior: pollTime captured before AppleScript (200ms ago)
-        let preCallTime = now - 0.2
-        manager.setInterpolationState(position: 50.0, pollTime: preCallTime)
+        // Simulate midpoint behavior: 200ms call, midpoint is 100ms ago
+        let midpointTime = now - 0.1
+        manager.setInterpolationState(position: 50.0, pollTime: midpointTime)
+        let midPos = manager.playbackPosition
 
-        let correctPos = manager.playbackPosition
+        // Simulate pre-call (200ms ago) — would overshoot
+        manager.setInterpolationState(position: 50.0, pollTime: now - 0.2)
+        let prePos = manager.playbackPosition
 
-        // Simulate old buggy behavior: pollTime captured after AppleScript (now)
+        // Simulate post-call (now) — would undershoot
         manager.setInterpolationState(position: 50.0, pollTime: now)
+        let postPos = manager.playbackPosition
 
-        let buggyPos = manager.playbackPosition
-
-        // The correct position should be ahead of the buggy one by ~200ms
-        let diff = correctPos - buggyPos
-        check(diff >= 0.15, "pre-call timestamp produces ahead position: diff=\(diff)")
-        check(diff <= 0.25, "difference is roughly the IPC latency: diff=\(diff)")
-        print("  ✓ Pre-call timestamp alignment reduces lag")
+        // Midpoint should be between pre-call and post-call
+        check(midPos < prePos, "midpoint < pre-call: \(midPos) < \(prePos)")
+        check(midPos > postPos, "midpoint > post-call: \(midPos) > \(postPos)")
+        // Midpoint error is ~half the IPC latency (~100ms), not the full amount
+        let midError = midPos - 50.0
+        check(midError >= 0.05, "midpoint offset is reasonable: \(midError)")
+        check(midError <= 0.15, "midpoint offset not too large: \(midError)")
+        print("  ✓ Midpoint timestamp alignment minimizes sync error")
     }
 
     // seekTo resets interpolation baseline

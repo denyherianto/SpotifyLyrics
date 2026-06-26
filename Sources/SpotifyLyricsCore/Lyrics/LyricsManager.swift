@@ -14,6 +14,7 @@ public final class LyricsManager: ObservableObject {
 
     private let lrcLib = LRCLibProvider()
     private let musixmatch = MusixmatchProvider()
+    private let speechProvider = SpeechRecognitionProvider()
     private var cache: [String: [LyricLine]] = [:]
     private var enrichmentCache: [String: [Int: LineEnrichment]] = [:]
     private var enrichmentTask: Task<Void, Never>?
@@ -62,6 +63,28 @@ public final class LyricsManager: ObservableObject {
             return
         }
 
+        isLoading = false
+    }
+
+    /// Attempt speech recognition on captured audio as a last-resort lyrics source.
+    /// Called by the alignment coordinator when lyrics fetch returned empty.
+    public func attemptSpeechRecognition(
+        audioBuffer: [Float],
+        captureStartPosition: TimeInterval,
+        cacheKey: String
+    ) async {
+        guard !hasLyrics else { return }
+
+        isLoading = true
+        if let lines = await speechProvider.recognizeLyrics(
+            from: audioBuffer,
+            captureStartPosition: captureStartPosition
+        ) {
+            cache[cacheKey] = lines
+            currentLines = lines
+            hasLyrics = true
+            startEnrichment(for: cacheKey)
+        }
         isLoading = false
     }
 

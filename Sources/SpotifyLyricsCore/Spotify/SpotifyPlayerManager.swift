@@ -9,8 +9,10 @@ public final class SpotifyPlayerManager: ObservableObject {
     @Published public var isShuffling = false
     @Published public var isRepeating = false
     @Published public var artworkURL: URL?
+    @Published public var isLiked: Bool = false
 
     private let bridge = AppleScriptBridge()
+    private let accessibilityBridge = AccessibilityBridge()
     private var pollTimer: Timer?
     private var lastTrackKey: String?
 
@@ -29,6 +31,9 @@ public final class SpotifyPlayerManager: ObservableObject {
 
     public var onTrackChanged: ((TrackInfo) -> Void)?
 
+    /// Whether to use Accessibility APIs for faster supplementary polling.
+    public var useAccessibility: Bool = true
+
     public init() {}
 
     public func startPolling() {
@@ -46,11 +51,24 @@ public final class SpotifyPlayerManager: ObservableObject {
         pollTimer = nil
     }
 
+    /// Fast supplementary poll using Accessibility APIs.
+    /// Much faster than AppleScript (~1-5ms vs ~50-200ms).
+    /// Called between AppleScript polls for smoother state updates.
+    public func accessibilityPoll() {
+        guard useAccessibility, AccessibilityBridge.isAccessibilityEnabled else { return }
+        guard let info = accessibilityBridge.getPlaybackInfo() else { return }
+
+        // Update like status (not available via AppleScript)
+        isLiked = info.isLiked
+
+        // Update playing state faster than AppleScript
+        let newState: AppleScriptBridge.PlayerState = info.isPlaying ? .playing : .paused
+        if newState != playerState {
+            playerState = newState
+        }
+    }
+
     private func poll() {
-        // Capture wall-clock time BEFORE the AppleScript call so the timestamp
-        // aligns with when Spotify actually sampled its player position.
-        // AppleScript IPC takes ~50-200ms; recording time after the call would
-        // make the interpolated position lag behind by that roundtrip duration.
         let pollStart = CFAbsoluteTimeGetCurrent()
 
         // Single AppleScript call that also detects if Spotify is not running
@@ -63,10 +81,18 @@ public final class SpotifyPlayerManager: ObservableObject {
             return
         }
 
+        let pollEnd = CFAbsoluteTimeGetCurrent()
+
+        // Use the midpoint between call start and end as the best estimate of
+        // when Spotify actually sampled its player position. Using pollStart
+        // alone causes overshoot (roundtrip duration added to interpolation);
+        // using pollEnd alone causes undershoot. The midpoint minimizes error.
+        let pollMid = (pollStart + pollEnd) / 2
+
         isSpotifyRunning = true
         playerState = info.state
         lastPolledPosition = info.position
-        lastPollTime = pollStart
+        lastPollTime = pollMid
         isShuffling = info.isShuffling
         isRepeating = info.isRepeating
 

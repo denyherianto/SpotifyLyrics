@@ -1,15 +1,16 @@
 import Foundation
 
-public struct LyricLine: Identifiable, Equatable {
-    public let id = UUID()
+public struct LyricLine: Identifiable, Equatable, Codable {
+    public let id: UUID
     public let timestamp: TimeInterval
     public let text: String
-    /// Per-word timings for karaoke fill, when available (enhanced-LRC / richsync).
-    public let words: [LyricWord]?
+    /// Per-word timings for karaoke fill, when available (enhanced-LRC / richsync / local alignment).
+    public var words: [LyricWord]?
     /// Absolute end time of this line, when known.
     public let endTime: TimeInterval?
 
     public init(timestamp: TimeInterval, text: String, words: [LyricWord]? = nil, endTime: TimeInterval? = nil) {
+        self.id = UUID()
         self.timestamp = timestamp
         self.text = text
         self.words = words

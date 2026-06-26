@@ -25,7 +25,7 @@ public struct LyricLineView: View {
     @State private var isHovered = false
 
     public var body: some View {
-        VStack(spacing: 2) {
+        VStack(spacing: 4) {
             if let rom = enrichment?.romanization {
                 Text(rom)
                     .font(.system(size: enrichmentFontSize, weight: .regular, design: .rounded))
@@ -48,7 +48,7 @@ public struct LyricLineView: View {
         .frame(maxWidth: .infinity, alignment: .center)
         .opacity(lineOpacity)
         .scaleEffect(scale)
-        .padding(.vertical, 2)
+        .padding(.vertical, enrichment != nil ? 6 : 2)
         .padding(.horizontal, 8)
         .background(
             RoundedRectangle(cornerRadius: 6)
