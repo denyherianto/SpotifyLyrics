@@ -224,6 +224,12 @@ struct MenuBarView: View {
                             .controlSize(.small)
                             .labelsHidden()
                     }
+                    settingsRow("AI Summary") {
+                        Toggle("", isOn: $overlayController.showSongSummary)
+                            .toggleStyle(.switch)
+                            .controlSize(.small)
+                            .labelsHidden()
+                    }
                     if soundClassifier.currentMood != .unknown {
                         settingsRow("Mood") {
                             HStack(spacing: 4) {

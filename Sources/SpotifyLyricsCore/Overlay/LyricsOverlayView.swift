@@ -20,6 +20,9 @@ public struct LyricsOverlayView: View {
     @State private var isAutoScrolling = false
     @State private var scrollProxy: ScrollViewProxy?
     @State private var isOverlayHovered = false
+    @State private var cardPreviewImage: NSImage?
+    @State private var showCardPreview = false
+    private let cardGenerator = LyricsCardGenerator()
 
     public var body: some View {
         ZStack {
@@ -30,7 +33,19 @@ public struct LyricsOverlayView: View {
             } else if !lyricsManager.hasLyrics {
                 statusView("No lyrics available")
             } else {
-                lyricsScrollView
+                ZStack {
+                    lyricsScrollView
+                        .opacity(lyricsManager.isInstrumentalBreak ? 0 : 1)
+
+                    if lyricsManager.isInstrumentalBreak {
+                        InstrumentalBreakView(
+                            lyricsManager: lyricsManager,
+                            playerManager: playerManager
+                        )
+                        .transition(.opacity)
+                    }
+                }
+                .animation(.easeInOut(duration: 0.5), value: lyricsManager.isInstrumentalBreak)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -48,6 +63,12 @@ public struct LyricsOverlayView: View {
                     Text(track.artist)
                         .font(.system(size: 11, weight: .medium, design: .rounded))
                         .foregroundStyle(.white.opacity(0.6))
+                    if let summary = lyricsManager.songSummary {
+                        Text(summary)
+                            .font(.system(size: 11, weight: .regular, design: .rounded))
+                            .foregroundStyle(.white.opacity(0.5))
+                            .italic()
+                    }
                 }
                 .lineLimit(1)
                 .padding(.horizontal, 14)
@@ -107,6 +128,45 @@ public struct LyricsOverlayView: View {
         }
         .animation(.easeInOut(duration: 0.2), value: isOverlayHovered)
         .onWindowHover { isOverlayHovered = $0 }
+        .overlay {
+            if showCardPreview, let image = cardPreviewImage {
+                cardPreviewOverlay(image: image)
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: showCardPreview)
+    }
+
+    @ViewBuilder
+    private func cardPreviewOverlay(image: NSImage) -> some View {
+        ZStack {
+            Color.black.opacity(0.7)
+                .onTapGesture { showCardPreview = false }
+
+            VStack(spacing: 12) {
+                Image(nsImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: 280, maxHeight: 280)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .shadow(radius: 10)
+
+                HStack(spacing: 10) {
+                    Button("Copy to Clipboard") {
+                        cardGenerator.copyToClipboard(image)
+                        showCardPreview = false
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+
+                    Button("Cancel") {
+                        showCardPreview = false
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
+        }
     }
 
     private func scrollBackToCurrent() {
@@ -191,6 +251,9 @@ public struct LyricsOverlayView: View {
     private func lineView(index: Int, line: LyricLine) -> some View {
         let isActive = index == lyricsManager.currentLineIndex
         let lineEnrichment = lyricsManager.enrichment[index]
+        let shareHandler: (LyricLine, LineEnrichment?) -> Void = { line, enrichment in
+            generateCardPreview(line: line, enrichment: enrichment)
+        }
         if isActive && (animationMode == .karaoke || animationMode == .glow) {
             TimelineView(.animation) { _ in
                 LyricLineView(
@@ -200,7 +263,8 @@ public struct LyricsOverlayView: View {
                     mode: animationMode,
                     position: playerManager.playbackPosition,
                     lineEnd: lineEnd(at: index),
-                    enrichment: lineEnrichment
+                    enrichment: lineEnrichment,
+                    onShareAsCard: shareHandler
                 )
             }
         } else {
@@ -211,7 +275,8 @@ public struct LyricsOverlayView: View {
                 mode: animationMode,
                 position: playerManager.playbackPosition,
                 lineEnd: lineEnd(at: index),
-                enrichment: lineEnrichment
+                enrichment: lineEnrichment,
+                onShareAsCard: shareHandler
             )
         }
     }
@@ -225,12 +290,49 @@ public struct LyricsOverlayView: View {
         return lines[index].timestamp + 5
     }
 
+    private func generateCardPreview(line: LyricLine, enrichment: LineEnrichment?) {
+        guard let track = playerManager.currentTrack else { return }
+        let artworkURL = playerManager.artworkURL
+
+        Task {
+            // Download album artwork for the card background
+            var artwork: NSImage?
+            if let url = artworkURL {
+                if let (data, _) = try? await URLSession.shared.data(from: url) {
+                    artwork = NSImage(data: data)
+                }
+            }
+
+            let image = cardGenerator.generateCard(
+                line: line,
+                enrichment: enrichment,
+                title: track.title,
+                artist: track.artist,
+                artworkImage: artwork
+            )
+            cardPreviewImage = image
+            showCardPreview = true
+        }
+    }
+
     private func statusView(_ message: String) -> some View {
-        Text(message)
-            .font(.system(size: 18, weight: .medium, design: .rounded))
-            .foregroundStyle(.white.opacity(0.6))
-            .padding(.horizontal, 24)
-            .padding(.vertical, 16)
+        TimelineView(.animation) { timeline in
+            let phase = timeline.date.timeIntervalSinceReferenceDate
+            let breathe = (sin(phase * 1.8) + 1) / 2 // 0…1
+
+            VStack(spacing: 10) {
+                Image(systemName: "music.note.list")
+                    .font(.system(size: 28, weight: .light))
+                    .foregroundStyle(.white.opacity(0.3 + 0.25 * breathe))
+                    .scaleEffect(1.0 + 0.06 * breathe)
+
+                Text(message)
+                    .font(.system(size: 15, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.4 + 0.2 * breathe))
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 16)
     }
 }
 

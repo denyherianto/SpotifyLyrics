@@ -23,10 +23,10 @@ public enum AnimationMode: String, CaseIterable {
     /// Animation used for active-state changes and auto-scroll transitions.
     public var transition: Animation {
         switch self {
-        case .karaoke: return .easeInOut(duration: 0.35)
-        case .smooth:  return .easeInOut(duration: 0.35)
-        case .spring:  return .spring(response: 0.4, dampingFraction: 0.6)
-        case .glow:    return .easeInOut(duration: 0.45)
+        case .karaoke: return .spring(response: 0.45, dampingFraction: 0.82)
+        case .smooth:  return .spring(response: 0.5, dampingFraction: 0.85)
+        case .spring:  return .spring(response: 0.35, dampingFraction: 0.65)
+        case .glow:    return .easeOut(duration: 0.4)
         }
     }
 }

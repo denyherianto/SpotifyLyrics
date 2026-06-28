@@ -50,6 +50,9 @@ final class OverlayController: ObservableObject {
     @Published var showTranslation: Bool = false {
         didSet { UserDefaults.standard.set(showTranslation, forKey: "showTranslation") }
     }
+    @Published var showSongSummary: Bool = true {
+        didSet { UserDefaults.standard.set(showSongSummary, forKey: "showSongSummary") }
+    }
     @Published var targetLanguage: TranslationLanguage = .indonesian {
         didSet { UserDefaults.standard.set(targetLanguage.rawValue, forKey: "targetLanguage") }
     }
@@ -107,6 +110,9 @@ final class OverlayController: ObservableObject {
         }
         if defaults.object(forKey: "showTranslation") != nil {
             self._showTranslation = Published(initialValue: defaults.bool(forKey: "showTranslation"))
+        }
+        if defaults.object(forKey: "showSongSummary") != nil {
+            self._showSongSummary = Published(initialValue: defaults.bool(forKey: "showSongSummary"))
         }
         if let saved = defaults.string(forKey: "targetLanguage"),
            let lang = TranslationLanguage(rawValue: saved) {
@@ -214,6 +220,16 @@ final class OverlayController: ObservableObject {
     }
 }
 
+/// Shared app state singleton for App Intents access.
+@MainActor
+final class AppState {
+    static let shared = AppState()
+    var playerManager: SpotifyPlayerManager?
+    var lyricsManager: LyricsManager?
+    var overlayController: OverlayController?
+    private init() {}
+}
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let playerManager = SpotifyPlayerManager()
@@ -228,6 +244,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Hide dock icon
         NSApp.setActivationPolicy(.accessory)
 
+        // Expose shared state for App Intents
+        AppState.shared.playerManager = playerManager
+        AppState.shared.lyricsManager = lyricsManager
+        AppState.shared.overlayController = overlayController
+
         // Setup menu bar status item with scrolling track info
         statusBarController = StatusBarController(
             playerManager: playerManager,
@@ -239,6 +260,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Sync enrichment settings to LyricsManager
         lyricsManager.showRomanization = overlayController.showRomanization
         lyricsManager.showTranslation = overlayController.showTranslation
+        lyricsManager.showSongSummary = overlayController.showSongSummary
         lyricsManager.targetLanguage = overlayController.targetLanguage.rawValue
 
         // Sync enrichment settings and debounce refresh to avoid
@@ -275,6 +297,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
 
+        overlayController.$showSongSummary
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] value in
+                guard let self else { return }
+                self.lyricsManager.showSongSummary = value
+            }
+            .store(in: &cancellables)
+
         // Wire up mini ↔ full switching callback
         overlayController.switchOverlayMode = { [weak self] in
             guard let self else { return }
@@ -287,7 +318,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         playerManager.onTrackChanged = { [weak self] track in
             guard let self else { return }
             Task { @MainActor in
-                await self.lyricsManager.fetchLyrics(for: track)
+                self.lyricsManager.fetchLyrics(for: track)
             }
         }
 
@@ -297,7 +328,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                self.lyricsManager.updateCurrentLine(at: self.playerManager.playbackPosition)
+                let pos = self.playerManager.playbackPosition
+                self.lyricsManager.updateCurrentLine(at: pos)
+                self.lyricsManager.updateInstrumentalBreak(at: pos)
                 self.scheduleNextLine()
             }
         }
@@ -306,6 +339,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         playerManager.onPredictiveLineSwitch = { [weak self] position in
             guard let self else { return }
             self.lyricsManager.updateCurrentLine(at: position)
+            self.lyricsManager.updateInstrumentalBreak(at: position)
             self.scheduleNextLine()
         }
 

@@ -36,9 +36,9 @@ func checkApprox(_ a: Double, _ b: Double, accuracy: Double = 0.01, file: String
 
 @main
 struct TestMain {
+    @MainActor
     static func main() async {
         setbuf(stdout, nil)
-        await MainActor.run {
         print("Running SpotifyLyrics Tests...\n")
 
         testLRCParser()
@@ -53,6 +53,10 @@ struct TestMain {
         testEnrichment()
         testOverlayTrackInfo()
         testPlaybackInterpolation()
+        testInstrumentalBreak()
+        testIntents()
+        await testFoundationModelProvider()
+        testLyricsCardGenerator()
 
         print("\n========================================")
         if failures.isEmpty {
@@ -67,7 +71,6 @@ struct TestMain {
         print("========================================\n")
 
         fflush(stdout)
-        }
         exit(failed > 0 ? 1 : 0)
     }
 }

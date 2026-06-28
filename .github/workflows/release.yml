@@ -1,0 +1,84 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Swift
+        uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: '6.0'
+
+      - name: Build release binary
+        run: swift build -c release --product SpotifyLyrics
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Create app bundle
+        run: |
+          APP_DIR="SpotifyLyrics.app/Contents"
+          mkdir -p "$APP_DIR/MacOS"
+          mkdir -p "$APP_DIR/Resources"
+
+          # Copy binary
+          cp .build/release/SpotifyLyrics "$APP_DIR/MacOS/SpotifyLyrics"
+
+          # Copy Info.plist and update version
+          cp Info.plist "$APP_DIR/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ steps.version.outputs.VERSION }}" "$APP_DIR/Info.plist"
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ steps.version.outputs.VERSION }}" "$APP_DIR/Info.plist"
+
+          # Copy resources if any
+          if [ -d "Resources" ] && [ "$(ls -A Resources)" ]; then
+            cp -R Resources/* "$APP_DIR/Resources/"
+          fi
+
+          # Copy mascot icon if available
+          if [ -f "Assets/mascot.svg" ]; then
+            cp Assets/mascot.svg "$APP_DIR/Resources/"
+          fi
+
+      - name: Create DMG
+        run: |
+          DMG_NAME="SpotifyLyrics-${{ steps.version.outputs.VERSION }}-mac.dmg"
+
+          # Create a temporary directory for DMG contents
+          mkdir -p dmg-contents
+          cp -R SpotifyLyrics.app dmg-contents/
+          ln -s /Applications dmg-contents/Applications
+
+          # Create DMG
+          hdiutil create -volname "SpotifyLyrics" \
+            -srcfolder dmg-contents \
+            -ov -format UDZO \
+            "$DMG_NAME"
+
+          echo "DMG_NAME=$DMG_NAME" >> "$GITHUB_ENV"
+
+      - name: Create zip archives
+        run: |
+          # Versioned zip for the release page
+          ZIP_VERSIONED="SpotifyLyrics-${{ steps.version.outputs.VERSION }}-mac.zip"
+          ditto -c -k --keepParent SpotifyLyrics.app "$ZIP_VERSIONED"
+          echo "ZIP_VERSIONED=$ZIP_VERSIONED" >> "$GITHUB_ENV"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            ${{ env.DMG_NAME }}
+            ${{ env.ZIP_VERSIONED }}

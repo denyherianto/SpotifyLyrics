@@ -11,8 +11,10 @@ public struct LyricLineView: View {
     public let lineEnd: TimeInterval
     /// Optional enrichment (romanization / translation) for this line.
     public let enrichment: LineEnrichment?
+    /// Callback for "Share as Card" context menu action.
+    public var onShareAsCard: ((LyricLine, LineEnrichment?) -> Void)?
 
-    public init(line: LyricLine, isActive: Bool, offset: Int, mode: AnimationMode, position: TimeInterval, lineEnd: TimeInterval, enrichment: LineEnrichment? = nil) {
+    public init(line: LyricLine, isActive: Bool, offset: Int, mode: AnimationMode, position: TimeInterval, lineEnd: TimeInterval, enrichment: LineEnrichment? = nil, onShareAsCard: ((LyricLine, LineEnrichment?) -> Void)? = nil) {
         self.line = line
         self.isActive = isActive
         self.offset = offset
@@ -20,6 +22,7 @@ public struct LyricLineView: View {
         self.position = position
         self.lineEnd = lineEnd
         self.enrichment = enrichment
+        self.onShareAsCard = onShareAsCard
     }
 
     @State private var isHovered = false
@@ -31,7 +34,10 @@ public struct LyricLineView: View {
                     .font(.system(size: enrichmentFontSize, weight: .regular, design: .rounded))
                     .foregroundStyle(.white.opacity(isActive ? 0.6 : 0.4))
                     .shadow(color: .black.opacity(0.4), radius: 2, x: 0, y: 1)
-                    .transition(.opacity)
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .move(edge: .top)).combined(with: .scale(scale: 0.95)),
+                        removal: .opacity
+                    ))
             }
 
             content
@@ -41,13 +47,18 @@ public struct LyricLineView: View {
                     .font(.system(size: enrichmentFontSize, weight: .regular, design: .rounded))
                     .foregroundStyle(.white.opacity(isActive ? 0.55 : 0.35))
                     .shadow(color: .black.opacity(0.4), radius: 2, x: 0, y: 1)
-                    .transition(.opacity)
+                    .transition(.asymmetric(
+                        insertion: .opacity.combined(with: .move(edge: .bottom)).combined(with: .scale(scale: 0.95)),
+                        removal: .opacity
+                    ))
             }
         }
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity, alignment: .center)
         .opacity(lineOpacity)
         .scaleEffect(scale)
+        .blur(radius: lineBlur)
+        .offset(y: lineYOffset)
         .padding(.vertical, enrichment != nil ? 6 : 2)
         .padding(.horizontal, 8)
         .background(
@@ -60,6 +71,15 @@ public struct LyricLineView: View {
                 NSCursor.pointingHand.push()
             } else {
                 NSCursor.pop()
+            }
+        }
+        .contextMenu {
+            Button("Share as Card") {
+                onShareAsCard?(line, enrichment)
+            }
+            Button("Copy Line") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(line.text, forType: .string)
             }
         }
         .animation(mode.transition, value: isActive)
@@ -134,5 +154,24 @@ public struct LyricLineView: View {
         case 3: return 0.35
         default: return 0.25
         }
+    }
+
+    /// Depth-of-field blur for distant lines
+    private var lineBlur: CGFloat {
+        if isHovered { return 0 }
+        switch abs(offset) {
+        case 0...2: return 0
+        case 3: return 1.0
+        case 4: return 2.0
+        default: return 3.0
+        }
+    }
+
+    /// Subtle vertical offset for inactive lines, creating a parallax feel
+    private var lineYOffset: CGFloat {
+        guard !isActive else { return 0 }
+        let direction: CGFloat = offset > 0 ? 1 : -1
+        let distance = min(abs(offset), 5)
+        return direction * CGFloat(distance) * 0.5
     }
 }

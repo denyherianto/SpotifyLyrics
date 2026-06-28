@@ -43,6 +43,9 @@ public struct MiniOverlayView: View {
                 miniStatusText("Loading lyrics...")
             } else if !lyricsManager.hasLyrics {
                 miniStatusText("No lyrics available")
+            } else if lyricsManager.isInstrumentalBreak {
+                MiniInstrumentalBreakView(lyricsManager: lyricsManager)
+                    .transition(.opacity)
             } else {
                 currentLineContent
             }
@@ -180,9 +183,21 @@ public struct MiniOverlayView: View {
     }
 
     private func miniStatusText(_ message: String) -> some View {
-        Text(message)
-            .font(.system(size: 13, weight: .medium, design: .rounded))
-            .foregroundStyle(.white.opacity(0.5))
+        TimelineView(.animation) { timeline in
+            let phase = timeline.date.timeIntervalSinceReferenceDate
+            let breathe = (sin(phase * 1.8) + 1) / 2
+
+            HStack(spacing: 6) {
+                Image(systemName: "music.note")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.3 + 0.25 * breathe))
+                    .scaleEffect(1.0 + 0.05 * breathe)
+
+                Text(message)
+                    .font(.system(size: 13, weight: .medium, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.35 + 0.2 * breathe))
+            }
+        }
     }
 
     private func effectiveLineEnd(for index: Int) -> TimeInterval {

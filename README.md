@@ -63,6 +63,12 @@ A lightweight macOS menu bar app that displays synced lyrics at the bottom of yo
 
 ## Installation
 
+### Download (recommended)
+
+Grab the latest `.dmg` from the [Releases](https://github.com/denyherianto/SpotifyLyrics/releases) page, open it, and drag SpotifyLyrics to Applications.
+
+> **Note:** The app is unsigned. On first launch, right-click the app and select **Open**, or go to **System Settings > Privacy & Security > Open Anyway**.
+
 ### Build from source
 
 ```bash
