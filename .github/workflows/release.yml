@@ -15,13 +15,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Swift
-        uses: swift-actions/setup-swift@v2
-        with:
-          swift-version: '6.0'
-
       - name: Build release binary
-        run: swift build -c release --product SpotifyLyrics
+        run: |
+          # Use Xcode's bundled Swift (avoids compiler bugs in standalone Swift 6.0.x)
+          swift --version
+          swift build -c release --product SpotifyLyrics
 
       - name: Extract version from tag
         id: version
