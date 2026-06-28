@@ -20,6 +20,7 @@ public final class LyricsManager: ObservableObject {
     public var showRomanization = false
     public var showTranslation = false
     public var showSongSummary = false
+    public var aiTranslationMode: AITranslationMode = .refine
     public var targetLanguage: String = "en"
 
     private let lrcLib = LRCLibProvider()
@@ -219,6 +220,7 @@ public final class LyricsManager: ObservableObject {
         let romanize = showRomanization
         let translate = showTranslation
         let target = targetLanguage
+        let aiMode = aiTranslationMode
 
         enrichmentTask = Task { [weak self] in
             guard let self else { return }
@@ -226,7 +228,13 @@ public final class LyricsManager: ObservableObject {
                 lines: lines,
                 romanize: romanize,
                 translate: translate,
-                targetLanguage: target
+                targetLanguage: target,
+                aiTranslationMode: aiMode,
+                onRefinement: aiMode != .off ? { [weak self] refined in
+                    guard let self, !Task.isCancelled else { return }
+                    self.enrichmentCache[enrichKey] = refined
+                    self.enrichment = refined
+                } : nil
             )
             guard !Task.isCancelled else { return }
             self.enrichmentCache[enrichKey] = result
@@ -253,7 +261,7 @@ public final class LyricsManager: ObservableObject {
     }
 
     private func enrichmentCacheKey(for lyricsKey: String) -> String {
-        "\(lyricsKey)|r:\(showRomanization)|t:\(showTranslation)|\(targetLanguage)"
+        "\(lyricsKey)|r:\(showRomanization)|t:\(showTranslation)|ai:\(aiTranslationMode.rawValue)|\(targetLanguage)"
     }
 
     private func enrichmentCacheKey(from lines: [LyricLine]) -> String {

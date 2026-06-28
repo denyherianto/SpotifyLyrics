@@ -53,6 +53,9 @@ final class OverlayController: ObservableObject {
     @Published var showSongSummary: Bool = true {
         didSet { UserDefaults.standard.set(showSongSummary, forKey: "showSongSummary") }
     }
+    @Published var aiTranslationMode: AITranslationMode = .refine {
+        didSet { UserDefaults.standard.set(aiTranslationMode.rawValue, forKey: "aiTranslationMode") }
+    }
     @Published var targetLanguage: TranslationLanguage = .indonesian {
         didSet { UserDefaults.standard.set(targetLanguage.rawValue, forKey: "targetLanguage") }
     }
@@ -113,6 +116,10 @@ final class OverlayController: ObservableObject {
         }
         if defaults.object(forKey: "showSongSummary") != nil {
             self._showSongSummary = Published(initialValue: defaults.bool(forKey: "showSongSummary"))
+        }
+        if let saved = defaults.string(forKey: "aiTranslationMode"),
+           let mode = AITranslationMode(rawValue: saved) {
+            self._aiTranslationMode = Published(initialValue: mode)
         }
         if let saved = defaults.string(forKey: "targetLanguage"),
            let lang = TranslationLanguage(rawValue: saved) {
@@ -261,6 +268,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         lyricsManager.showRomanization = overlayController.showRomanization
         lyricsManager.showTranslation = overlayController.showTranslation
         lyricsManager.showSongSummary = overlayController.showSongSummary
+        lyricsManager.aiTranslationMode = overlayController.aiTranslationMode
         lyricsManager.targetLanguage = overlayController.targetLanguage.rawValue
 
         // Sync enrichment settings and debounce refresh to avoid
@@ -303,6 +311,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .sink { [weak self] value in
                 guard let self else { return }
                 self.lyricsManager.showSongSummary = value
+            }
+            .store(in: &cancellables)
+
+        overlayController.$aiTranslationMode
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] (value: AITranslationMode) in
+                guard let self else { return }
+                self.lyricsManager.aiTranslationMode = value
+                if self.lyricsManager.showTranslation {
+                    self.scheduleEnrichmentRefresh()
+                }
             }
             .store(in: &cancellables)
 

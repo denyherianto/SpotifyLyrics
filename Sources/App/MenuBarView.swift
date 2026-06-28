@@ -224,11 +224,13 @@ struct MenuBarView: View {
                             .controlSize(.small)
                             .labelsHidden()
                     }
-                    settingsRow("AI Summary") {
-                        Toggle("", isOn: $overlayController.showSongSummary)
-                            .toggleStyle(.switch)
-                            .controlSize(.small)
-                            .labelsHidden()
+                    if AITranslationMode.isAIAvailable {
+                        settingsRow("AI Summary") {
+                            Toggle("", isOn: $overlayController.showSongSummary)
+                                .toggleStyle(.switch)
+                                .controlSize(.small)
+                                .labelsHidden()
+                        }
                     }
                     if soundClassifier.currentMood != .unknown {
                         settingsRow("Mood") {
@@ -252,8 +254,32 @@ struct MenuBarView: View {
                             .pickerStyle(.menu)
                             .labelsHidden()
                             .controlSize(.small)
-                            .frame(maxWidth: 120)
+                            .fixedSize()
                         }
+                        if AITranslationMode.isAIAvailable {
+                            settingsRow("AI Translation") {
+                                Picker("", selection: $overlayController.aiTranslationMode) {
+                                    ForEach(AITranslationMode.allCases, id: \.self) { mode in
+                                        Text(mode.displayName).tag(mode)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .labelsHidden()
+                                .controlSize(.small)
+                                .fixedSize()
+                                .help("Primary: AI translates directly (best quality, slower)\nRefine: Fast translation first, AI improves in background\nOff: Standard translation only (fastest)")
+                            }
+                        }
+                    }
+                    if !AITranslationMode.isAIAvailable {
+                        HStack(spacing: 4) {
+                            Image(systemName: "info.circle")
+                                .font(.system(size: 10))
+                            Text("Enable Apple Intelligence in System Settings → Apple Intelligence & Siri for AI features")
+                                .font(.system(size: 9))
+                        }
+                        .foregroundStyle(.tertiary)
+                        .padding(.top, 2)
                     }
                 }
 
@@ -295,8 +321,29 @@ struct MenuBarView: View {
                     .pickerStyle(.menu)
                     .labelsHidden()
                     .controlSize(.small)
-                    .frame(maxWidth: 120)
+                    .fixedSize()
                 }
+
+                Divider()
+
+                // Clear Cache
+                Button {
+                    lyricsManager.clearCache()
+                    if let track = playerManager.currentTrack {
+                        lyricsManager.fetchLyrics(for: track)
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 11))
+                        Text("Clear Cache")
+                            .font(.system(size: 12))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 4)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
 
                 Divider()
             }
@@ -315,6 +362,9 @@ struct MenuBarView: View {
                             .font(.system(size: 9, weight: .semibold))
                             .rotationEffect(.degrees(isSettingsExpanded ? 0 : 180))
                     }
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 8)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
@@ -330,6 +380,9 @@ struct MenuBarView: View {
                         Image(systemName: "power")
                             .font(.system(size: 14))
                     }
+                    .padding(.vertical, 6)
+                    .padding(.horizontal, 8)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)

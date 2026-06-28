@@ -44,6 +44,7 @@ public struct SeekBarView: View {
                         .fill(tint.opacity(0.8))
                         .frame(width: max(0, geo.size.width * min(1, progress)), height: 4)
                 }
+                .frame(maxHeight: .infinity)
                 .contentShape(Rectangle())
                 .onHover { hovering in
                     if hovering {
@@ -66,7 +67,7 @@ public struct SeekBarView: View {
                         }
                 )
             }
-            .frame(height: 4)
+            .frame(height: 20)
 
             // Time labels
             HStack {

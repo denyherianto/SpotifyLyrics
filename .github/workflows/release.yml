@@ -45,8 +45,8 @@ jobs:
           fi
 
           # Copy mascot icon if available
-          if [ -f "Assets/mascot.svg" ]; then
-            cp Assets/mascot.svg "$APP_DIR/Resources/"
+          if [ -f "Assets/spotify-lyrics-avatar.png" ]; then
+            cp Assets/spotify-lyrics-avatar.png "$APP_DIR/Resources/"
           fi
 
       - name: Create DMG

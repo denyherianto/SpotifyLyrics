@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="Assets/mascot.svg" width="200" alt="Spotify Lyrics Mascot"/>
+  <img src="Assets/spotify-lyrics-avatar.png" width="200" alt="Spotify Lyrics Mascot"/>
 </p>
 
 <h1 align="center">Spotify Lyrics</h1>

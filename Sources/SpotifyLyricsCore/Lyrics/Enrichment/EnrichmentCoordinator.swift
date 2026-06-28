@@ -1,5 +1,8 @@
 import Foundation
 import NaturalLanguage
+#if canImport(FoundationModels) && compiler(>=6.2)
+import FoundationModels
+#endif
 
 @MainActor
 public final class EnrichmentCoordinator {
@@ -16,15 +19,19 @@ public final class EnrichmentCoordinator {
     }
 
     /// Enrich lyrics lines with romanization and/or translation.
+    /// The `onRefinement` callback fires asynchronously when AI-refined translations are ready.
     public func enrich(
         lines: [String],
         romanize: Bool,
         translate: Bool,
-        targetLanguage: String = "en"
+        targetLanguage: String = "en",
+        aiTranslationMode: AITranslationMode = .refine,
+        onRefinement: (([Int: LineEnrichment]) -> Void)? = nil
     ) async -> [Int: LineEnrichment] {
         guard !lines.isEmpty, romanize || translate else { return [:] }
 
         let sourceLanguage = detectLanguage(from: lines)
+        print("[Enrichment] Starting enrichment: \(lines.count) lines, source=\(sourceLanguage ?? "nil"), target=\(targetLanguage), romanize=\(romanize), translate=\(translate), aiMode=\(aiTranslationMode.rawValue)")
         var result: [Int: LineEnrichment] = [:]
 
         // Romanization
@@ -44,21 +51,100 @@ public final class EnrichmentCoordinator {
         }
 
         // Translation
-        if translate, let provider = provider(for: .translation) {
-            if sourceLanguage != targetLanguage {
-                do {
-                    let translated = try await provider.translate(lines, to: targetLanguage, from: sourceLanguage)
-                    for (i, trans) in translated.enumerated() {
-                        if let trans, !trans.isEmpty {
-                            var enrichment = result[i] ?? LineEnrichment()
-                            enrichment.translation = trans
-                            result[i] = enrichment
+        if translate, sourceLanguage != targetLanguage {
+            switch aiTranslationMode {
+            case .primary:
+                // AI translates first, Apple Translation fills gaps
+                print("[Enrichment] AI Primary mode: translating with Foundation Model")
+                let aiTranslations = await translateWithFoundationModel(lines, targetLanguage: targetLanguage)
+                for (i, trans) in aiTranslations {
+                    var enrichment = result[i] ?? LineEnrichment()
+                    enrichment.translation = trans
+                    result[i] = enrichment
+                    print("[Enrichment]   [\(i)] AI: \"\(lines[i])\" → \"\(trans)\"")
+                }
+
+                // Fill gaps with Apple Translation
+                if let provider = provider(for: .translation) {
+                    let missingIndices = lines.indices.filter { i in
+                        let trimmed = lines[i].trimmingCharacters(in: .whitespacesAndNewlines)
+                        return !trimmed.isEmpty && result[i]?.translation == nil
+                    }
+                    if !missingIndices.isEmpty {
+                        print("[Enrichment] Apple Translation fallback for \(missingIndices.count) lines")
+                        if let translated = try? await provider.translate(lines, to: targetLanguage, from: sourceLanguage) {
+                            for i in missingIndices {
+                                if let trans = translated[i], !trans.isEmpty {
+                                    var enrichment = result[i] ?? LineEnrichment()
+                                    enrichment.translation = trans
+                                    result[i] = enrichment
+                                }
+                            }
                         }
                     }
-                } catch {
-                    print("[Enrichment] Translation error: \(error)")
+                }
+
+            case .refine:
+                // Apple Translation first, AI refines in background
+                if let provider = provider(for: .translation) {
+                    print("[Enrichment] Refine mode: Apple Translation first")
+                    do {
+                        let translated = try await provider.translate(lines, to: targetLanguage, from: sourceLanguage)
+                        for (i, trans) in translated.enumerated() {
+                            if let trans, !trans.isEmpty {
+                                var enrichment = result[i] ?? LineEnrichment()
+                                enrichment.translation = trans
+                                result[i] = enrichment
+                                print("[Enrichment]   [\(i)] \"\(lines[i])\" → \"\(trans)\"")
+                            }
+                        }
+                    } catch {
+                        print("[Enrichment] Apple Translation error: \(error)")
+                    }
+                }
+
+                if let onRefinement {
+                    let baseResult = result
+                    let target = targetLanguage
+                    let capturedLines = lines
+                    Task { [weak self] in
+                        guard let self else { return }
+                        let aiTranslations = await self.translateWithFoundationModel(capturedLines, targetLanguage: target)
+                        guard !aiTranslations.isEmpty, !Task.isCancelled else {
+                            print("[Enrichment] AI refinement: no improvements")
+                            return
+                        }
+                        var updated = baseResult
+                        for (index, trans) in aiTranslations {
+                            var enrichment = updated[index] ?? LineEnrichment()
+                            enrichment.translation = trans
+                            updated[index] = enrichment
+                        }
+                        print("[Enrichment] AI refinement: replaced \(aiTranslations.count) translations")
+                        onRefinement(updated)
+                    }
+                }
+
+            case .off:
+                // Apple Translation only
+                if let provider = provider(for: .translation) {
+                    print("[Enrichment] Off mode: Apple Translation only")
+                    do {
+                        let translated = try await provider.translate(lines, to: targetLanguage, from: sourceLanguage)
+                        for (i, trans) in translated.enumerated() {
+                            if let trans, !trans.isEmpty {
+                                var enrichment = result[i] ?? LineEnrichment()
+                                enrichment.translation = trans
+                                result[i] = enrichment
+                            }
+                        }
+                    } catch {
+                        print("[Enrichment] Apple Translation error: \(error)")
+                    }
                 }
             }
+        } else if translate {
+            print("[Enrichment] Skipping translation: source (\(sourceLanguage ?? "nil")) == target (\(targetLanguage))")
         }
 
         return result
@@ -77,5 +163,98 @@ public final class EnrichmentCoordinator {
 
     private func provider(for capability: EnrichmentCapabilities) -> LyricsEnrichmentProvider? {
         providers.first { $0.capabilities.contains(capability) }
+    }
+
+    /// Translate song lyrics using Foundation Models (on-device AI).
+    /// Returns a dictionary of line index → translated text.
+    private func translateWithFoundationModel(
+        _ lines: [String],
+        targetLanguage: String
+    ) async -> [Int: String] {
+        #if canImport(FoundationModels) && compiler(>=6.2)
+        guard #available(macOS 26, *) else {
+            print("[AI-Translate] macOS 26 not available")
+            return [:]
+        }
+
+        // Filter to non-empty lines
+        let indexedLines = lines.enumerated().compactMap { (i, line) -> (Int, String)? in
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : (i, trimmed)
+        }
+        guard !indexedLines.isEmpty else { return [:] }
+
+        let langName = Locale.current.localizedString(forLanguageCode: targetLanguage) ?? targetLanguage
+
+        // Build numbered lyrics
+        let numberedLyrics = indexedLines.enumerated().map { (n, pair) in
+            "\(n + 1). \(pair.1)"
+        }.joined(separator: "\n")
+
+        let prompt = """
+        Translate these song lyrics to \(langName). These are song lyrics so translate with the correct meaning in context (slang, idioms, figurative language).
+        For example "high" in songs usually means mabuk/melayang, NOT tinggi. "Blue" often means sedih, NOT biru.
+        Output ONLY the translations, one per line, in the format: NUMBER. translation
+
+        \(numberedLyrics)
+        """
+
+        print("[AI-Translate] Sending \(indexedLines.count) lines to Foundation Model")
+
+        do {
+            let session = LanguageModelSession {
+                "You translate song lyrics accurately, understanding slang, idioms, and figurative language. Output only numbered translations, nothing else."
+            }
+
+            let response: String? = try await withThrowingTaskGroup(of: String?.self) { group in
+                group.addTask {
+                    let resp = try await session.respond(to: prompt)
+                    return resp.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+                group.addTask {
+                    try await Task.sleep(for: .seconds(20))
+                    return nil
+                }
+                if let first = try await group.next() {
+                    group.cancelAll()
+                    return first
+                }
+                return nil
+            }
+
+            guard let response, !response.isEmpty else {
+                print("[AI-Translate] No response or timed out")
+                return [:]
+            }
+
+            print("[AI-Translate] Raw response:\n\(response)")
+
+            // Parse "NUMBER. translation" lines
+            var translations: [Int: String] = [:]
+            for line in response.components(separatedBy: .newlines) {
+                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { continue }
+
+                guard let dotIndex = trimmed.firstIndex(of: ".") else { continue }
+                let numStr = trimmed[trimmed.startIndex..<dotIndex].trimmingCharacters(in: .whitespaces)
+                guard let num = Int(numStr), num >= 1, num <= indexedLines.count else { continue }
+
+                let translatedText = trimmed[trimmed.index(after: dotIndex)...].trimmingCharacters(in: .whitespaces)
+                if !translatedText.isEmpty {
+                    let originalIndex = indexedLines[num - 1].0
+                    translations[originalIndex] = translatedText
+                }
+            }
+
+            print("[AI-Translate] Parsed \(translations.count) translations")
+            return translations
+        } catch {
+            print("[AI-Translate] Error: \(error)")
+            return [:]
+        }
+        #else
+        print("[AI-Translate] FoundationModels not available at compile time")
+        return [:]
+        #endif
     }
 }

@@ -30,11 +30,20 @@ public struct AppleTranslationProvider: LyricsEnrichmentProvider, Sendable {
         var results = [String?](repeating: nil, count: lines.count)
         let recognizer = NLLanguageRecognizer()
 
+        // Classify each line: detect language, check if mixed
+        struct LineInfo {
+            let index: Int
+            let trimmed: String
+            let detectedLang: String?
+            let isMixed: Bool
+            let segments: [LangSegment]
+        }
+
+        var lineInfos: [LineInfo] = []
         for (i, line) in lines.enumerated() {
             let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { continue }
 
-            // Detect dominant language of the whole line
             recognizer.reset()
             recognizer.processString(trimmed)
             let lineLang = recognizer.dominantLanguage?.rawValue
@@ -45,52 +54,91 @@ public struct AppleTranslationProvider: LyricsEnrichmentProvider, Sendable {
                 if lineCode == targetCode { continue }
             }
 
-            // Check if line has mixed languages (multiple scripts)
             let segments = segmentByLanguage(trimmed, recognizer: recognizer)
+            let isMixed = segments.count > 1
+            lineInfos.append(LineInfo(index: i, trimmed: trimmed, detectedLang: lineLang, isMixed: isMixed, segments: segments))
+        }
 
-            if segments.count > 1 {
-                // Mixed-language line: translate each foreign segment independently
-                var translatedParts: [String] = []
-                var anyTranslated = false
+        // Handle mixed-language lines individually
+        for info in lineInfos where info.isMixed {
+            var translatedParts: [String] = []
+            var anyTranslated = false
 
-                for segment in segments {
-                    let segCode = Locale.Language(identifier: segment.language).languageCode?.identifier ?? segment.language
-                    if segCode == targetCode {
-                        // Already in target language, keep as-is
-                        translatedParts.append(segment.text)
-                    } else if let sess = await session(for: segment.language) {
-                        if let response = try? await sess.translate(segment.text),
-                           response.targetText != segment.text {
-                            translatedParts.append(response.targetText)
-                            anyTranslated = true
-                        } else {
-                            translatedParts.append(segment.text)
-                        }
+            for segment in info.segments {
+                let segCode = Locale.Language(identifier: segment.language).languageCode?.identifier ?? segment.language
+                if segCode == targetCode {
+                    translatedParts.append(segment.text)
+                } else if let sess = await session(for: segment.language) {
+                    if let response = try? await sess.translate(segment.text),
+                       response.targetText != segment.text {
+                        translatedParts.append(response.targetText)
+                        anyTranslated = true
                     } else {
                         translatedParts.append(segment.text)
                     }
+                } else {
+                    translatedParts.append(segment.text)
                 }
+            }
 
-                if anyTranslated {
-                    results[i] = translatedParts.joined(separator: " ")
-                }
-            } else {
-                // Single-language line: translate directly
-                guard let lang = lineLang ?? sourceLanguage else { continue }
-                guard let sess = await session(for: lang) else { continue }
+            if anyTranslated {
+                results[info.index] = translatedParts.joined(separator: " ")
+            }
+        }
 
-                do {
-                    let response = try await sess.translate(trimmed)
-                    if response.targetText != trimmed {
-                        results[i] = response.targetText
-                    }
-                } catch {
-                    if let fallbackLang = sourceLanguage, fallbackLang != lang,
-                       let fallbackSess = await session(for: fallbackLang) {
-                        if let response = try? await fallbackSess.translate(trimmed),
-                           response.targetText != trimmed {
-                            results[i] = response.targetText
+        // Batch single-language lines by detected language for contextual translation
+        let singleLangInfos = lineInfos.filter { !$0.isMixed }
+
+        var langBatches: [String: [(info: LineInfo, lang: String)]] = [:]
+        for info in singleLangInfos {
+            guard let lang = info.detectedLang ?? sourceLanguage else { continue }
+            langBatches[lang, default: []].append((info, lang))
+        }
+
+        let batchSeparator = "\n"
+
+        for (lang, batch) in langBatches {
+            guard let sess = await session(for: lang) else {
+                if let fallbackLang = sourceLanguage, fallbackLang != lang,
+                   let fallbackSess = await session(for: fallbackLang) {
+                    for item in batch {
+                        if let response = try? await fallbackSess.translate(item.info.trimmed),
+                           response.targetText != item.info.trimmed {
+                            results[item.info.index] = response.targetText
                         }
+                    }
+                }
+                continue
+            }
+
+            // Translate lines as a joined paragraph for better context
+            let paragraph = batch.map(\.info.trimmed).joined(separator: batchSeparator)
+
+            do {
+                let response = try await sess.translate(paragraph)
+                let translatedLines = response.targetText.components(separatedBy: batchSeparator)
+
+                if translatedLines.count == batch.count {
+                    for (j, item) in batch.enumerated() {
+                        let translated = translatedLines[j].trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !translated.isEmpty && translated != item.info.trimmed {
+                            results[item.info.index] = translated
+                        }
+                    }
+                } else {
+                    // Fallback: translate individually if paragraph splitting failed
+                    for item in batch {
+                        if let singleResponse = try? await sess.translate(item.info.trimmed),
+                           singleResponse.targetText != item.info.trimmed {
+                            results[item.info.index] = singleResponse.targetText
+                        }
+                    }
+                }
+            } catch {
+                for item in batch {
+                    if let singleResponse = try? await sess.translate(item.info.trimmed),
+                       singleResponse.targetText != item.info.trimmed {
+                        results[item.info.index] = singleResponse.targetText
                     }
                 }
             }
