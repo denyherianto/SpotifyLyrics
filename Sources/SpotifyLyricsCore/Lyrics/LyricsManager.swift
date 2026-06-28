@@ -8,6 +8,7 @@ public final class LyricsManager: ObservableObject {
     @Published public var hasLyrics = false
     @Published public var enrichment: [Int: LineEnrichment] = [:]
     @Published public var songSummary: String?
+    @Published public var translationNotice: String?
     @Published public var isInstrumentalBreak = false
     @Published public var instrumentalBreakCountdown: TimeInterval = 0
     @Published public var nextVocalLineText: String?
@@ -221,6 +222,19 @@ public final class LyricsManager: ObservableObject {
         let translate = showTranslation
         let target = targetLanguage
         let aiMode = aiTranslationMode
+
+        // Check translation language availability
+        if translate {
+            Task { [weak self] in
+                guard let self else { return }
+                let notice = await self.enrichmentCoordinator.checkTranslationAvailability(
+                    lines: lines, targetLanguage: target
+                )
+                self.translationNotice = notice
+            }
+        } else {
+            translationNotice = nil
+        }
 
         enrichmentTask = Task { [weak self] in
             guard let self else { return }

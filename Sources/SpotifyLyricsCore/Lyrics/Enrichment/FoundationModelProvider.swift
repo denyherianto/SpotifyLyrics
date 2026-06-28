@@ -52,6 +52,10 @@ public final class FoundationModelProvider {
     private func invokeFoundationModel(lines: [String], title: String, artist: String) async -> String? {
         #if canImport(FoundationModels) && compiler(>=6.2)
         guard #available(macOS 26, *) else { return nil }
+        guard SystemLanguageModel.default.availability == .available else {
+            print("[AI-Summary] Apple Intelligence not enabled")
+            return nil
+        }
 
         let prompt = buildPrompt(lines: lines, title: title, artist: artist)
 

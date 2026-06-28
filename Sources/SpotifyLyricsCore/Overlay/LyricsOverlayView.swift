@@ -20,6 +20,7 @@ public struct LyricsOverlayView: View {
     @State private var isAutoScrolling = false
     @State private var scrollProxy: ScrollViewProxy?
     @State private var isOverlayHovered = false
+    @State private var displayedLineIndex: Int = 0
     @State private var cardPreviewImage: NSImage?
     @State private var showCardPreview = false
     private let cardGenerator = LyricsCardGenerator()
@@ -174,6 +175,7 @@ public struct LyricsOverlayView: View {
         if let proxy = scrollProxy {
             isAutoScrolling = true
             withAnimation(animationMode.transition) {
+                displayedLineIndex = lyricsManager.currentLineIndex
                 proxy.scrollTo(lyricsManager.currentLineIndex, anchor: .center)
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -196,6 +198,9 @@ public struct LyricsOverlayView: View {
                             .onTapGesture {
                                 playerManager.seekTo(line.timestamp)
                                 lyricsManager.updateCurrentLine(at: line.timestamp)
+                                withAnimation(animationMode.transition) {
+                                    displayedLineIndex = lyricsManager.currentLineIndex
+                                }
                                 isManualScrolling = false
                             }
                     }
@@ -206,6 +211,7 @@ public struct LyricsOverlayView: View {
             }
             .onAppear {
                 scrollProxy = proxy
+                displayedLineIndex = lyricsManager.currentLineIndex
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                     isAutoScrolling = true
                     proxy.scrollTo(lyricsManager.currentLineIndex, anchor: .center)
@@ -218,6 +224,7 @@ public struct LyricsOverlayView: View {
                 guard !isManualScrolling else { return }
                 isAutoScrolling = true
                 withAnimation(animationMode.transition) {
+                    displayedLineIndex = newIndex
                     proxy.scrollTo(newIndex, anchor: .center)
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
@@ -249,7 +256,8 @@ public struct LyricsOverlayView: View {
     /// for the karaoke fill and glow pulse; other lines render statically.
     @ViewBuilder
     private func lineView(index: Int, line: LyricLine) -> some View {
-        let isActive = index == lyricsManager.currentLineIndex
+        let activeIndex = displayedLineIndex
+        let isActive = index == activeIndex
         let lineEnrichment = lyricsManager.enrichment[index]
         let shareHandler: (LyricLine, LineEnrichment?) -> Void = { line, enrichment in
             generateCardPreview(line: line, enrichment: enrichment)
@@ -271,7 +279,7 @@ public struct LyricsOverlayView: View {
             LyricLineView(
                 line: line,
                 isActive: isActive,
-                offset: index - lyricsManager.currentLineIndex,
+                offset: index - activeIndex,
                 mode: animationMode,
                 position: playerManager.playbackPosition,
                 lineEnd: lineEnd(at: index),

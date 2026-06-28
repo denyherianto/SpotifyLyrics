@@ -3,6 +3,9 @@ import NaturalLanguage
 #if canImport(FoundationModels) && compiler(>=6.2)
 import FoundationModels
 #endif
+#if canImport(Translation) && compiler(>=6.2)
+import Translation
+#endif
 
 @MainActor
 public final class EnrichmentCoordinator {
@@ -59,7 +62,7 @@ public final class EnrichmentCoordinator {
                 let aiTranslations = await translateWithFoundationModel(lines, targetLanguage: targetLanguage)
                 for (i, trans) in aiTranslations {
                     var enrichment = result[i] ?? LineEnrichment()
-                    enrichment.translation = trans
+                    enrichment.translation = fixPostCommaCapitalization(trans)
                     result[i] = enrichment
                     print("[Enrichment]   [\(i)] AI: \"\(lines[i])\" → \"\(trans)\"")
                 }
@@ -76,7 +79,7 @@ public final class EnrichmentCoordinator {
                             for i in missingIndices {
                                 if let trans = translated[i], !trans.isEmpty {
                                     var enrichment = result[i] ?? LineEnrichment()
-                                    enrichment.translation = trans
+                                    enrichment.translation = fixPostCommaCapitalization(trans)
                                     result[i] = enrichment
                                 }
                             }
@@ -93,7 +96,7 @@ public final class EnrichmentCoordinator {
                         for (i, trans) in translated.enumerated() {
                             if let trans, !trans.isEmpty {
                                 var enrichment = result[i] ?? LineEnrichment()
-                                enrichment.translation = trans
+                                enrichment.translation = fixPostCommaCapitalization(trans)
                                 result[i] = enrichment
                                 print("[Enrichment]   [\(i)] \"\(lines[i])\" → \"\(trans)\"")
                             }
@@ -117,7 +120,7 @@ public final class EnrichmentCoordinator {
                         var updated = baseResult
                         for (index, trans) in aiTranslations {
                             var enrichment = updated[index] ?? LineEnrichment()
-                            enrichment.translation = trans
+                            enrichment.translation = fixPostCommaCapitalization(trans)
                             updated[index] = enrichment
                         }
                         print("[Enrichment] AI refinement: replaced \(aiTranslations.count) translations")
@@ -134,7 +137,7 @@ public final class EnrichmentCoordinator {
                         for (i, trans) in translated.enumerated() {
                             if let trans, !trans.isEmpty {
                                 var enrichment = result[i] ?? LineEnrichment()
-                                enrichment.translation = trans
+                                enrichment.translation = fixPostCommaCapitalization(trans)
                                 result[i] = enrichment
                             }
                         }
@@ -165,6 +168,56 @@ public final class EnrichmentCoordinator {
         providers.first { $0.capabilities.contains(capability) }
     }
 
+    /// Lowercase words after commas that were incorrectly capitalized by translation APIs.
+    /// e.g. "Ya, Ah" → "Ya, ah"
+    private func fixPostCommaCapitalization(_ text: String) -> String {
+        var result = text
+        let pattern = try! NSRegularExpression(pattern: #",\s+([A-Z])"#)
+        let matches = pattern.matches(in: result, range: NSRange(result.startIndex..., in: result))
+        for match in matches.reversed() {
+            guard let capRange = Range(match.range(at: 1), in: result) else { continue }
+            result.replaceSubrange(capRange, with: result[capRange].lowercased())
+        }
+        return result
+    }
+
+    /// Check if the translation language pair is available and return a user-facing notice if not.
+    public func checkTranslationAvailability(lines: [String], targetLanguage: String) async -> String? {
+        #if canImport(Translation) && compiler(>=6.2)
+        guard #available(macOS 26.0, *) else { return nil }
+
+        let sourceLanguage = detectLanguage(from: lines)
+        guard let srcLang = sourceLanguage else { return nil }
+
+        let src = Locale.Language(identifier: srcLang)
+        let target = Locale.Language(identifier: targetLanguage)
+
+        let srcCode = src.languageCode?.identifier ?? srcLang
+        let targetCode = target.languageCode?.identifier ?? targetLanguage
+        guard srcCode != targetCode else { return nil }
+
+        let availability = LanguageAvailability()
+        let status = await availability.status(from: src, to: target)
+
+        switch status {
+        case .installed:
+            return nil
+        case .supported:
+            let srcName = Locale.current.localizedString(forLanguageCode: srcLang) ?? srcLang
+            let targetName = Locale.current.localizedString(forLanguageCode: targetLanguage) ?? targetLanguage
+            return "Download \(srcName) → \(targetName) language pack in Settings → Translation & Languages."
+        case .unsupported:
+            let srcName = Locale.current.localizedString(forLanguageCode: srcLang) ?? srcLang
+            let targetName = Locale.current.localizedString(forLanguageCode: targetLanguage) ?? targetLanguage
+            return "\(srcName) → \(targetName) translation is not supported."
+        @unknown default:
+            return nil
+        }
+        #else
+        return nil
+        #endif
+    }
+
     /// Translate song lyrics using Foundation Models (on-device AI).
     /// Returns a dictionary of line index → translated text.
     private func translateWithFoundationModel(
@@ -174,6 +227,10 @@ public final class EnrichmentCoordinator {
         #if canImport(FoundationModels) && compiler(>=6.2)
         guard #available(macOS 26, *) else {
             print("[AI-Translate] macOS 26 not available")
+            return [:]
+        }
+        guard SystemLanguageModel.default.availability == .available else {
+            print("[AI-Translate] Apple Intelligence not enabled")
             return [:]
         }
 

@@ -82,7 +82,6 @@ public struct LyricLineView: View {
                 NSPasteboard.general.setString(line.text, forType: .string)
             }
         }
-        .animation(mode.transition, value: isActive)
         .animation(.easeInOut(duration: 0.15), value: isHovered)
     }
 
@@ -99,7 +98,7 @@ public struct LyricLineView: View {
 
     private func baseText(_ color: Color) -> some View {
         Text(line.text)
-            .font(.system(size: fontSize, weight: isActive ? .bold : .regular, design: .rounded))
+            .font(.system(size: fontSize, weight: fontWeight, design: .rounded))
             .foregroundStyle(color)
             .shadow(color: .black.opacity(0.5), radius: isActive ? 4 : 2, x: 0, y: 1)
     }
@@ -126,14 +125,30 @@ public struct LyricLineView: View {
     }
 
     private var fontSize: CGFloat {
-        isActive ? 24 : 18
+        if mode == .smooth {
+            return 22
+        }
+        return isActive ? 24 : 18
+    }
+
+    private var fontWeight: Font.Weight {
+        if mode == .smooth {
+            return .semibold
+        }
+        return isActive ? .bold : .regular
     }
 
     private var enrichmentFontSize: CGFloat {
-        isActive ? 14 : 12
+        if mode == .smooth {
+            return 13
+        }
+        return isActive ? 14 : 12
     }
 
     private var scale: CGFloat {
+        if mode == .smooth {
+            return isActive ? 1.09 : 0.82
+        }
         guard isActive else { return 0.95 }
         return mode == .spring ? 1.06 : 1.0
     }
@@ -156,8 +171,9 @@ public struct LyricLineView: View {
         }
     }
 
-    /// Depth-of-field blur for distant lines
+    /// Depth-of-field blur for distant lines (disabled for smooth mode — too expensive to animate)
     private var lineBlur: CGFloat {
+        if mode == .smooth { return 0 }
         if isHovered { return 0 }
         switch abs(offset) {
         case 0...2: return 0

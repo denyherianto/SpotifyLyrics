@@ -270,13 +270,28 @@ struct MenuBarView: View {
                                 .help("Primary: AI translates directly (best quality, slower)\nRefine: Fast translation first, AI improves in background\nOff: Standard translation only (fastest)")
                             }
                         }
+                        if let notice = lyricsManager.translationNotice {
+                            HStack(alignment: .top, spacing: 4) {
+                                Image(systemName: "exclamationmark.triangle")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.orange)
+                                    .padding(.top, 1)
+                                Text(notice)
+                                    .font(.system(size: 9))
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .padding(.top, 2)
+                        }
                     }
                     if !AITranslationMode.isAIAvailable {
-                        HStack(spacing: 4) {
+                        HStack(alignment: .top, spacing: 4) {
                             Image(systemName: "info.circle")
                                 .font(.system(size: 10))
-                            Text("Enable Apple Intelligence in System Settings → Apple Intelligence & Siri for AI features")
+                                .padding(.top, 1)
+                            Text("AI features require Apple Intelligence.\nEnable in Settings → Apple Intelligence & Siri.")
                                 .font(.system(size: 9))
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         .foregroundStyle(.tertiary)
                         .padding(.top, 2)
