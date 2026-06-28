@@ -1,5 +1,5 @@
 import Foundation
-#if canImport(FoundationModels)
+#if canImport(FoundationModels) && compiler(>=6.2)
 import FoundationModels
 #endif
 
@@ -50,7 +50,7 @@ public final class FoundationModelProvider {
     }
 
     private func invokeFoundationModel(lines: [String], title: String, artist: String) async -> String? {
-        #if canImport(FoundationModels)
+        #if canImport(FoundationModels) && compiler(>=6.2)
         guard #available(macOS 26, *) else { return nil }
 
         let prompt = buildPrompt(lines: lines, title: title, artist: artist)

@@ -1,7 +1,7 @@
 import Foundation
 import NaturalLanguage
 
-#if canImport(Translation)
+#if canImport(Translation) && compiler(>=6.2)
 import Translation
 
 @available(macOS 26.0, *)

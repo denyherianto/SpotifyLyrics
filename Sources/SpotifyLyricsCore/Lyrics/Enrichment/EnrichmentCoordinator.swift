@@ -7,7 +7,7 @@ public final class EnrichmentCoordinator {
 
     public init() {
         var list: [LyricsEnrichmentProvider] = [ICURomanizationProvider()]
-        #if canImport(Translation)
+        #if canImport(Translation) && compiler(>=6.2)
         if #available(macOS 26.0, *) {
             list.append(AppleTranslationProvider())
         }
