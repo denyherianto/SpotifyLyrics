@@ -59,6 +59,8 @@ public struct LyricLineView: View {
         .scaleEffect(scale)
         .blur(radius: lineBlur)
         .offset(y: lineYOffset)
+        .animation(mode.transition, value: isActive)
+        .animation(mode.transition, value: offset)
         .padding(.vertical, enrichment != nil ? 6 : 2)
         .padding(.horizontal, 8)
         .background(
@@ -147,10 +149,10 @@ public struct LyricLineView: View {
 
     private var scale: CGFloat {
         if mode == .smooth {
-            return isActive ? 1.09 : 0.82
+            return isActive ? 1.03 : 0.92
         }
-        guard isActive else { return 0.95 }
-        return mode == .spring ? 1.06 : 1.0
+        guard isActive else { return 0.97 }
+        return mode == .spring ? 1.04 : 1.0
     }
 
     private var foregroundColor: Color {
@@ -164,10 +166,10 @@ public struct LyricLineView: View {
         if isHovered { return 1.0 }
         switch abs(offset) {
         case 0: return 1.0
-        case 1: return 0.7
-        case 2: return 0.5
-        case 3: return 0.35
-        default: return 0.25
+        case 1: return 0.75
+        case 2: return 0.55
+        case 3: return 0.4
+        default: return 0.3
         }
     }
 

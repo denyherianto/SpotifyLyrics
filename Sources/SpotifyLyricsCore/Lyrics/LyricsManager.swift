@@ -25,7 +25,6 @@ public final class LyricsManager: ObservableObject {
     public var targetLanguage: String = "en"
 
     private let lrcLib = LRCLibProvider()
-    private let musixmatch = MusixmatchProvider()
     private let speechProvider = SpeechRecognitionProvider()
     private var cache: [String: [LyricLine]] = [:]
     private var enrichmentCache: [String: [Int: LineEnrichment]] = [:]
@@ -117,37 +116,10 @@ public final class LyricsManager: ObservableObject {
 
             try Task.checkCancellation()
 
-            // Fetch from both providers in parallel
             let title = track.title
             let artist = track.artist
 
-            let lines = await withTaskGroup(of: (source: String, lines: [LyricLine]?).self) { group -> [LyricLine]? in
-                group.addTask { [lrcLib = self.lrcLib] in
-                    let result = await lrcLib.fetchLyrics(title: title, artist: artist)
-                    return ("lrclib", result)
-                }
-                group.addTask { [musixmatch = self.musixmatch] in
-                    let result = await musixmatch.fetchLyrics(title: title, artist: artist)
-                    return ("musixmatch", result)
-                }
-
-                var lrcLibResult: [LyricLine]?
-                var musixmatchResult: [LyricLine]?
-
-                for await result in group {
-                    switch result.source {
-                    case "lrclib":
-                        lrcLibResult = result.lines
-                    case "musixmatch":
-                        musixmatchResult = result.lines
-                    default: break
-                    }
-                }
-
-                if let lines = lrcLibResult, !lines.isEmpty { return lines }
-                if let lines = musixmatchResult, !lines.isEmpty { return lines }
-                return nil
-            }
+            let lines = await lrcLib.fetchLyrics(title: title, artist: artist)
 
             try Task.checkCancellation()
 

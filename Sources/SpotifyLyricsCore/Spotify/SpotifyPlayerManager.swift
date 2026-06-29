@@ -31,6 +31,7 @@ public final class SpotifyPlayerManager: ObservableObject {
     /// Smoothing factor for exponential moving average of drift measurements.
     private let driftAlpha: Double = 0.3
 
+
     /// Returns the interpolated playback position with drift correction.
     public var playbackPosition: TimeInterval {
         guard playerState == .playing else { return lastPolledPosition }

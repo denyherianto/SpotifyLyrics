@@ -24,7 +24,7 @@ public enum AnimationMode: String, CaseIterable {
     public var transition: Animation {
         switch self {
         case .karaoke: return .spring(response: 0.45, dampingFraction: 0.82)
-        case .smooth:  return .easeOut(duration: 0.3)
+        case .smooth:  return .spring(response: 0.35, dampingFraction: 0.9)
         case .spring:  return .spring(response: 0.35, dampingFraction: 0.65)
         case .glow:    return .easeOut(duration: 0.4)
         }

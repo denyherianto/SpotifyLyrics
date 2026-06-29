@@ -227,7 +227,7 @@ public struct LyricsOverlayView: View {
                     displayedLineIndex = newIndex
                     proxy.scrollTo(newIndex, anchor: .center)
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
                     isAutoScrolling = false
                 }
             }

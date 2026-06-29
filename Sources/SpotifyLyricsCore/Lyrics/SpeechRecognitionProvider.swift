@@ -3,7 +3,7 @@ import Speech
 import AVFoundation
 
 /// Generates lyrics from captured audio using Apple's Speech framework (SFSpeechRecognizer).
-/// Used as a last-resort fallback when LRCLIB and Musixmatch have no results.
+/// Used as a last-resort fallback when LRCLIB has no results.
 ///
 /// Requires:
 /// - Speech Recognition permission (prompted on first use)

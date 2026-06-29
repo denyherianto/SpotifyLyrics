@@ -243,72 +243,79 @@ public final class EnrichmentCoordinator {
 
         let langName = Locale.current.localizedString(forLanguageCode: targetLanguage) ?? targetLanguage
 
-        // Build numbered lyrics
-        let numberedLyrics = indexedLines.enumerated().map { (n, pair) in
-            "\(n + 1). \(pair.1)"
-        }.joined(separator: "\n")
-
-        let prompt = """
-        Translate these song lyrics to \(langName). These are song lyrics so translate with the correct meaning in context (slang, idioms, figurative language).
-        For example "high" in songs usually means mabuk/melayang, NOT tinggi. "Blue" often means sedih, NOT biru.
-        Output ONLY the translations, one per line, in the format: NUMBER. translation
-
-        \(numberedLyrics)
-        """
-
-        print("[AI-Translate] Sending \(indexedLines.count) lines to Foundation Model")
-
-        do {
-            let session = LanguageModelSession {
-                "You translate song lyrics accurately, understanding slang, idioms, and figurative language. Output only numbered translations, nothing else."
-            }
-
-            let response: String? = try await withThrowingTaskGroup(of: String?.self) { group in
-                group.addTask {
-                    let resp = try await session.respond(to: prompt)
-                    return resp.content.trimmingCharacters(in: .whitespacesAndNewlines)
-                }
-                group.addTask {
-                    try await Task.sleep(for: .seconds(20))
-                    return nil
-                }
-                if let first = try await group.next() {
-                    group.cancelAll()
-                    return first
-                }
-                return nil
-            }
-
-            guard let response, !response.isEmpty else {
-                print("[AI-Translate] No response or timed out")
-                return [:]
-            }
-
-            print("[AI-Translate] Raw response:\n\(response)")
-
-            // Parse "NUMBER. translation" lines
-            var translations: [Int: String] = [:]
-            for line in response.components(separatedBy: .newlines) {
-                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !trimmed.isEmpty else { continue }
-
-                guard let dotIndex = trimmed.firstIndex(of: ".") else { continue }
-                let numStr = trimmed[trimmed.startIndex..<dotIndex].trimmingCharacters(in: .whitespaces)
-                guard let num = Int(numStr), num >= 1, num <= indexedLines.count else { continue }
-
-                let translatedText = trimmed[trimmed.index(after: dotIndex)...].trimmingCharacters(in: .whitespaces)
-                if !translatedText.isEmpty {
-                    let originalIndex = indexedLines[num - 1].0
-                    translations[originalIndex] = translatedText
-                }
-            }
-
-            print("[AI-Translate] Parsed \(translations.count) translations")
-            return translations
-        } catch {
-            print("[AI-Translate] Error: \(error)")
-            return [:]
+        // Split into batches to reduce guardrail violations
+        let batchSize = 10
+        let batches = stride(from: 0, to: indexedLines.count, by: batchSize).map {
+            Array(indexedLines[$0..<min($0 + batchSize, indexedLines.count)])
         }
+
+        print("[AI-Translate] Sending \(indexedLines.count) lines in \(batches.count) batches to Foundation Model")
+
+        var translations: [Int: String] = [:]
+
+        let session = LanguageModelSession {
+            "You are a professional song lyric translator. Translate lyrics accurately with correct contextual meaning for slang, idioms, and figurative language. Output only numbered translations."
+        }
+
+        for (batchIndex, batch) in batches.enumerated() {
+                guard !Task.isCancelled else { break }
+
+                let numberedLyrics = batch.enumerated().map { (n, pair) in
+                    "\(n + 1). \(pair.1)"
+                }.joined(separator: "\n")
+
+                let prompt = """
+                Translate these song lyrics to \(langName). Use correct contextual meaning (e.g. "high" = mabuk/melayang, "blue" = sedih).
+                Output ONLY: NUMBER. translation
+
+                \(numberedLyrics)
+                """
+
+                do {
+                    let response: String? = try await withThrowingTaskGroup(of: String?.self) { group in
+                        group.addTask {
+                            let resp = try await session.respond(to: prompt)
+                            return resp.content.trimmingCharacters(in: .whitespacesAndNewlines)
+                        }
+                        group.addTask {
+                            try await Task.sleep(for: .seconds(15))
+                            return nil
+                        }
+                        if let first = try await group.next() {
+                            group.cancelAll()
+                            return first
+                        }
+                        return nil
+                    }
+
+                    guard let response, !response.isEmpty else {
+                        print("[AI-Translate] Batch \(batchIndex + 1): no response or timed out")
+                        continue
+                    }
+
+                    // Parse "NUMBER. translation" lines
+                    for line in response.components(separatedBy: .newlines) {
+                        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard !trimmed.isEmpty else { continue }
+                        guard let dotIndex = trimmed.firstIndex(of: ".") else { continue }
+                        let numStr = trimmed[trimmed.startIndex..<dotIndex].trimmingCharacters(in: .whitespaces)
+                        guard let num = Int(numStr), num >= 1, num <= batch.count else { continue }
+                        let translatedText = trimmed[trimmed.index(after: dotIndex)...].trimmingCharacters(in: .whitespaces)
+                        if !translatedText.isEmpty {
+                            let originalIndex = batch[num - 1].0
+                            translations[originalIndex] = translatedText
+                        }
+                    }
+                    print("[AI-Translate] Batch \(batchIndex + 1): translated \(batch.count) lines")
+                } catch {
+                    // Guardrail violation or other error — skip this batch silently
+                    print("[AI-Translate] Batch \(batchIndex + 1) skipped (guardrail/error): \(error)")
+                    continue
+                }
+            }
+
+        print("[AI-Translate] Total: \(translations.count)/\(indexedLines.count) lines translated")
+        return translations
         #else
         print("[AI-Translate] FoundationModels not available at compile time")
         return [:]

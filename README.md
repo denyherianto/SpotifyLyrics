@@ -22,11 +22,11 @@ A lightweight macOS menu bar app that displays synced lyrics at the bottom of yo
 
 ### Lyrics & Playback
 - **Karaoke-style synced lyrics** — current line highlighted with word-by-word fill animation
-- **Word-level timing** — per-word karaoke fill via enhanced LRC word tags or Musixmatch richsync
+- **Word-level timing** — per-word karaoke fill via enhanced LRC word tags
 - **Auto-scroll** — lyrics follow the music in real-time
 - **Manual scroll** — scroll through lyrics freely, click "Back to Current" to resume
 - **Click-to-seek** — click any lyric line to jump Spotify playback to that timestamp
-- **Multiple lyrics sources** — LRCLIB (free, no API key) with Musixmatch fallback
+- **Multiple lyrics sources** — LRCLIB (free, no API key)
 - **Speech recognition fallback** — generates lyrics from audio via Apple Speech framework when no online provider has results
 - **Playback interpolation** — wall-clock interpolation between 500ms polls for smooth tracking
 
@@ -127,7 +127,6 @@ SpotifyLyricsCore/                  # Library target
 ├── Lyrics/
 │   ├── LRCParser.swift              # .lrc format parser (line + word tags)
 │   ├── LRCLibProvider.swift         # Free synced lyrics API
-│   ├── MusixmatchProvider.swift     # Fallback lyrics API (richsync support)
 │   ├── SpeechRecognitionProvider.swift  # Fallback lyrics via Apple Speech
 │   ├── LyricsManager.swift          # Provider orchestration + caching
 │   └── Enrichment/
@@ -168,7 +167,7 @@ swift run SpotifyLyricsTests
 
 1. **AppleScript** polls Spotify every 500ms for track info and playback position, supplemented by **Accessibility APIs** for faster state detection
 2. **Position interpolation** fills the gaps between polls using wall-clock time for smooth tracking
-3. **LRCLIB API** fetches synced lyrics (`.lrc` format with timestamps), with Musixmatch as fallback
+3. **LRCLIB API** fetches synced lyrics (`.lrc` format with timestamps)
 4. **Speech recognition** (Apple Speech framework) generates lyrics from audio when no online provider has results
 5. **LRC parser** extracts `[mm:ss.xx] text` into timed lyric lines, including inline `<mm:ss.xx>word` tags for word-level timing
 6. **Enrichment pipeline** detects language, adds romanization (phonetic readings), and translates lyrics on-device
@@ -190,14 +189,6 @@ swift run SpotifyLyricsTests
 | **AppKit** | Menu bar, window management, image processing |
 | **SwiftUI** | UI rendering |
 | **Core Foundation** | CFStringTokenizer for romanization |
-
-## Musixmatch Setup (Optional)
-
-LRCLIB works out of the box with no API key. For broader lyrics coverage, you can add a Musixmatch API key:
-
-```bash
-defaults write com.denyherianto.SpotifyLyrics musixmatchApiKey "YOUR_API_KEY"
-```
 
 ## License
 
