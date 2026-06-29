@@ -6,6 +6,10 @@
     <true/>
     <key>CFBundleName</key>
     <string>SpotifyLyrics</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundleIconName</key>
+    <string>AppIcon</string>
     <key>CFBundleIdentifier</key>
     <string>com.denyherianto.SpotifyLyrics</string>
     <key>CFBundleVersion</key>

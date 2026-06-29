@@ -253,7 +253,11 @@ public final class EnrichmentCoordinator {
 
         var translations: [Int: String] = [:]
 
-        let session = LanguageModelSession {
+        // Use permissive guardrails: lyric translation is a content-transformation
+        // task, so the default safety guardrails (which flag explicit lyrics as
+        // "unsafe content") are too aggressive and drop whole batches.
+        let model = SystemLanguageModel(useCase: .general, guardrails: .permissiveContentTransformations)
+        let session = LanguageModelSession(model: model) {
             "You are a professional song lyric translator. Translate lyrics accurately with correct contextual meaning for slang, idioms, and figurative language. Output only numbered translations."
         }
 

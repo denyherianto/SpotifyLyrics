@@ -60,7 +60,8 @@ public final class FoundationModelProvider {
         let prompt = buildPrompt(lines: lines, title: title, artist: artist)
 
         do {
-            let session = LanguageModelSession {
+            let model = SystemLanguageModel(useCase: .general, guardrails: .permissiveContentTransformations)
+            let session = LanguageModelSession(model: model) {
                 "You summarize song themes in one short sentence (max 15 words). Output only the summary sentence, nothing else."
             }
 

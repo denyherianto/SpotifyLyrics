@@ -46,6 +46,10 @@ public final class LRCLibProvider {
 
             return nil
         } catch {
+            // Cancellation is expected when the track changes mid-fetch — not an error.
+            if (error as? URLError)?.code == .cancelled || error is CancellationError {
+                return nil
+            }
             print("LRCLib error: \(error)")
             return nil
         }

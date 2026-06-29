@@ -49,6 +49,14 @@ jobs:
             cp Assets/spotify-lyrics-avatar.png "$APP_DIR/Resources/"
           fi
 
+          # Generate and copy the app icon (.icns) referenced by CFBundleIconFile
+          if [ -f "Assets/AppIcon.icns" ]; then
+            cp Assets/AppIcon.icns "$APP_DIR/Resources/AppIcon.icns"
+          else
+            ./scripts/make_icon.sh
+            cp Assets/AppIcon.icns "$APP_DIR/Resources/AppIcon.icns"
+          fi
+
       - name: Create DMG
         run: |
           DMG_NAME="SpotifyLyrics-${{ steps.version.outputs.VERSION }}-mac.dmg"
