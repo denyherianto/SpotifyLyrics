@@ -21,12 +21,14 @@ public enum AnimationMode: String, CaseIterable {
     }
 
     /// Animation used for active-state changes and auto-scroll transitions.
+    /// Snappy response with moderate damping — fast enough to feel responsive, damped enough
+    /// to settle cleanly. (Very long response + very high damping reads as "stiff/laggy".)
     public var transition: Animation {
         switch self {
-        case .karaoke: return .spring(response: 0.45, dampingFraction: 0.82)
-        case .smooth:  return .spring(response: 0.35, dampingFraction: 0.9)
-        case .spring:  return .spring(response: 0.35, dampingFraction: 0.65)
-        case .glow:    return .easeOut(duration: 0.4)
+        case .karaoke: return .spring(response: 0.40, dampingFraction: 0.82)
+        case .smooth:  return .spring(response: 0.38, dampingFraction: 0.85)
+        case .spring:  return .spring(response: 0.42, dampingFraction: 0.68)
+        case .glow:    return .easeInOut(duration: 0.35)
         }
     }
 }

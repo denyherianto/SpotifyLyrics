@@ -55,12 +55,15 @@ public struct LyricLineView: View {
         }
         .multilineTextAlignment(.center)
         .frame(maxWidth: .infinity, alignment: .center)
+        // Depth blur is applied innermost and its transaction animation is cleared, so changes
+        // to the radius snap instantly. Animating a Gaussian blur radius is GPU-expensive and
+        // stutters; several far lines crossing a blur threshold on every line change was a
+        // major source of jank. Scale/opacity/offset below still animate with the spring.
+        .blur(radius: lineBlur)
+        .transaction { $0.animation = nil }
         .opacity(lineOpacity)
         .scaleEffect(scale)
-        .blur(radius: lineBlur)
         .offset(y: lineYOffset)
-        .animation(mode.transition, value: isActive)
-        .animation(mode.transition, value: offset)
         .padding(.vertical, enrichment != nil ? 6 : 2)
         .padding(.horizontal, 8)
         .background(
@@ -87,15 +90,35 @@ public struct LyricLineView: View {
         .animation(.easeInOut(duration: 0.15), value: isHovered)
     }
 
-    @ViewBuilder
+    /// A single, identity-stable view tree for every line in every mode. The active⇄inactive
+    /// difference is expressed purely through animatable values (color, opacity, shadow, mask
+    /// width) rather than swapping between different view types — swapping breaks SwiftUI
+    /// identity and makes the line *pop* instead of transitioning.
     private var content: some View {
-        if isActive && mode == .karaoke {
-            karaokeText
-        } else if isActive && mode == .glow {
-            glowText
-        } else {
-            baseText(foregroundColor)
-        }
+        let isGlowActive = isActive && mode == .glow
+        let glowPulse = (sin(position * 3) + 1) / 2 // 0…1
+
+        return baseText(textBaseColor)
+            // Glow: a white halo that fades in/out via radius+opacity (0 when inactive).
+            .shadow(
+                color: .white.opacity(isGlowActive ? 0.25 + 0.45 * glowPulse : 0),
+                radius: isGlowActive ? 3 + 9 * glowPulse : 0
+            )
+            // Karaoke fill: a bright copy revealed left-to-right. Present in every karaoke-mode
+            // line (not just the active one) so activation animates the overlay's opacity
+            // instead of inserting/removing a whole subtree.
+            .overlay(alignment: .leading) {
+                if mode == .karaoke {
+                    let fraction = line.fillFraction(at: position, lineEnd: lineEnd)
+                    baseText(.white)
+                        .mask(alignment: .leading) {
+                            GeometryReader { geo in
+                                Rectangle().frame(width: geo.size.width * fraction)
+                            }
+                        }
+                        .opacity(isActive ? 1 : 0)
+                }
+            }
     }
 
     private func baseText(_ color: Color) -> some View {
@@ -105,54 +128,29 @@ public struct LyricLineView: View {
             .shadow(color: .black.opacity(0.5), radius: isActive ? 4 : 2, x: 0, y: 1)
     }
 
-    /// Japanese-karaoke fill: a dim base with a bright copy revealed left-to-right.
-    private var karaokeText: some View {
-        let fraction = line.fillFraction(at: position, lineEnd: lineEnd)
-        return baseText(.white.opacity(0.4))
-            .overlay(alignment: .leading) {
-                baseText(.white)
-                    .mask(alignment: .leading) {
-                        GeometryReader { geo in
-                            Rectangle().frame(width: geo.size.width * fraction)
-                        }
-                    }
-            }
+    /// Base text color. Karaoke's active line is dimmed because its brightness comes from the
+    /// fill overlay; every other case uses the standard foreground color.
+    private var textBaseColor: Color {
+        if isActive && mode == .karaoke { return .white.opacity(0.4) }
+        return foregroundColor
     }
 
-    /// Calm pulsing glow driven by the playback position.
-    private var glowText: some View {
-        let pulse = (sin(position * 3) + 1) / 2 // 0…1
-        return baseText(.white)
-            .shadow(color: .white.opacity(0.25 + 0.45 * pulse), radius: 3 + 9 * pulse)
-    }
+    /// Constant font size — size differentiation is handled by animatable `scaleEffect`
+    /// so transitions between active/inactive are smooth (font size changes can't animate).
+    private var fontSize: CGFloat { 21 }
 
-    private var fontSize: CGFloat {
-        if mode == .smooth {
-            return 22
-        }
-        return isActive ? 24 : 18
-    }
+    /// Constant weight — weight changes can't animate and cause visible jumps.
+    /// Opacity + scale provide sufficient visual distinction.
+    private var fontWeight: Font.Weight { .semibold }
 
-    private var fontWeight: Font.Weight {
-        if mode == .smooth {
-            return .semibold
-        }
-        return isActive ? .bold : .regular
-    }
-
-    private var enrichmentFontSize: CGFloat {
-        if mode == .smooth {
-            return 13
-        }
-        return isActive ? 14 : 12
-    }
+    private var enrichmentFontSize: CGFloat { 13 }
 
     private var scale: CGFloat {
         if mode == .smooth {
-            return isActive ? 1.03 : 0.92
+            return isActive ? 1.06 : 0.88
         }
-        guard isActive else { return 0.97 }
-        return mode == .spring ? 1.04 : 1.0
+        guard isActive else { return 0.86 }
+        return mode == .spring ? 1.15 : 1.10
     }
 
     private var foregroundColor: Color {
@@ -166,10 +164,10 @@ public struct LyricLineView: View {
         if isHovered { return 1.0 }
         switch abs(offset) {
         case 0: return 1.0
-        case 1: return 0.75
-        case 2: return 0.55
-        case 3: return 0.4
-        default: return 0.3
+        case 1: return 0.7
+        case 2: return 0.5
+        case 3: return 0.35
+        default: return 0.25
         }
     }
 

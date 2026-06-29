@@ -86,7 +86,10 @@ public final class SpotifyPlayerManager: ObservableObject {
         guard AccessibilityBridge.isAccessibilityEnabled else { return }
         guard let info = accessibilityBridge.getPlaybackInfo() else { return }
 
-        isLiked = info.isLiked
+        // Guard every @Published assignment: `@Published` fires objectWillChange on *every*
+        // set (even when the value is unchanged), so an unconditional assignment here would
+        // rebuild the entire SwiftUI overlay 10×/sec and make animations feel laggy.
+        if isLiked != info.isLiked { isLiked = info.isLiked }
 
         let newState: AppleScriptBridge.PlayerState = info.isPlaying ? .playing : .paused
         if newState != playerState {
@@ -139,12 +142,13 @@ public final class SpotifyPlayerManager: ObservableObject {
             }
         }
 
-        isSpotifyRunning = true
-        playerState = info.state
+        // Only assign @Published properties when they actually change — see accessibilityPoll().
+        if !isSpotifyRunning { isSpotifyRunning = true }
+        if playerState != info.state { playerState = info.state }
+        if isShuffling != info.isShuffling { isShuffling = info.isShuffling }
+        if isRepeating != info.isRepeating { isRepeating = info.isRepeating }
         lastPolledPosition = info.position
         lastPollTime = pollMid
-        isShuffling = info.isShuffling
-        isRepeating = info.isRepeating
 
         let newKey = info.track.cacheKey
         if newKey != lastTrackKey && !info.track.title.isEmpty {

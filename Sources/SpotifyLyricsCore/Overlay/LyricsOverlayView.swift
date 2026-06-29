@@ -18,6 +18,7 @@ public struct LyricsOverlayView: View {
 
     @State private var isManualScrolling = false
     @State private var isAutoScrolling = false
+    @State private var scrollGeneration = 0
     @State private var scrollProxy: ScrollViewProxy?
     @State private var isOverlayHovered = false
     @State private var displayedLineIndex: Int = 0
@@ -173,14 +174,31 @@ public struct LyricsOverlayView: View {
     private func scrollBackToCurrent() {
         isManualScrolling = false
         if let proxy = scrollProxy {
-            isAutoScrolling = true
-            withAnimation(animationMode.transition) {
-                displayedLineIndex = lyricsManager.currentLineIndex
-                proxy.scrollTo(lyricsManager.currentLineIndex, anchor: .center)
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                isAutoScrolling = false
-            }
+            animateToLine(lyricsManager.currentLineIndex, proxy: proxy)
+        }
+    }
+
+    /// Single entry point for moving the active line. Centers `index` and updates the active
+    /// state inside *one* spring transaction, so the scroll offset and the per-line
+    /// scale/opacity ride the exact same curve (mismatched curves read as jank). A generation
+    /// token guards `isAutoScrolling`: during a rapid run of line changes, only the latest
+    /// transition's timer clears the flag, so an early timer can't release it mid-flight and
+    /// misread the tail of an auto-scroll as a user scroll.
+    private func animateToLine(_ index: Int, proxy: ScrollViewProxy, animated: Bool = true) {
+        isAutoScrolling = true
+        scrollGeneration += 1
+        let generation = scrollGeneration
+        let move = {
+            displayedLineIndex = index
+            proxy.scrollTo(index, anchor: .center)
+        }
+        if animated {
+            withAnimation(animationMode.transition, move)
+        } else {
+            move()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+            if generation == scrollGeneration { isAutoScrolling = false }
         }
     }
 
@@ -198,10 +216,8 @@ public struct LyricsOverlayView: View {
                             .onTapGesture {
                                 playerManager.seekTo(line.timestamp)
                                 lyricsManager.updateCurrentLine(at: line.timestamp)
-                                withAnimation(animationMode.transition) {
-                                    displayedLineIndex = lyricsManager.currentLineIndex
-                                }
                                 isManualScrolling = false
+                                animateToLine(lyricsManager.currentLineIndex, proxy: proxy)
                             }
                     }
 
@@ -212,48 +228,33 @@ public struct LyricsOverlayView: View {
             .onAppear {
                 scrollProxy = proxy
                 displayedLineIndex = lyricsManager.currentLineIndex
+                // Jump (no animation) to the current line on first layout.
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    isAutoScrolling = true
-                    proxy.scrollTo(lyricsManager.currentLineIndex, anchor: .center)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        isAutoScrolling = false
-                    }
+                    animateToLine(lyricsManager.currentLineIndex, proxy: proxy, animated: false)
                 }
             }
             .onChange(of: lyricsManager.currentLineIndex) { newIndex in
                 guard !isManualScrolling else { return }
-                isAutoScrolling = true
-                withAnimation(animationMode.transition) {
-                    displayedLineIndex = newIndex
-                    proxy.scrollTo(newIndex, anchor: .center)
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.7) {
-                    isAutoScrolling = false
-                }
+                animateToLine(newIndex, proxy: proxy)
             }
             .onUserScroll {
                 guard !isAutoScrolling else { return }
                 isManualScrolling = true
             }
             .onChange(of: lyricsManager.enrichment.count) { _ in
-                // When enrichment changes (translation/romanization toggled),
-                // re-scroll to the current line so it stays centered.
+                // Enrichment toggled (translation/romanization) changes line heights, so
+                // re-center the current line once the new layout settles.
                 isManualScrolling = false
-                isAutoScrolling = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    withAnimation(animationMode.transition) {
-                        proxy.scrollTo(lyricsManager.currentLineIndex, anchor: .center)
-                    }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        isAutoScrolling = false
-                    }
+                    animateToLine(lyricsManager.currentLineIndex, proxy: proxy)
                 }
             }
         }
     }
 
-    /// Builds a line view. The active line is wrapped in a per-frame TimelineView
-    /// for the karaoke fill and glow pulse; other lines render statically.
+    /// Builds a line view. Every line uses the same `TimelineView` structure to keep
+    /// SwiftUI view identity stable across active-state changes. Only the active
+    /// karaoke/glow line actually runs per-frame; others are paused (zero cost).
     @ViewBuilder
     private func lineView(index: Int, line: LyricLine) -> some View {
         let activeIndex = displayedLineIndex
@@ -262,20 +263,9 @@ public struct LyricsOverlayView: View {
         let shareHandler: (LyricLine, LineEnrichment?) -> Void = { line, enrichment in
             generateCardPreview(line: line, enrichment: enrichment)
         }
-        if isActive && (animationMode == .karaoke || animationMode == .glow) {
-            TimelineView(.animation) { _ in
-                LyricLineView(
-                    line: line,
-                    isActive: true,
-                    offset: 0,
-                    mode: animationMode,
-                    position: playerManager.playbackPosition,
-                    lineEnd: lineEnd(at: index),
-                    enrichment: lineEnrichment,
-                    onShareAsCard: shareHandler
-                )
-            }
-        } else {
+        let needsPerFrame = isActive && (animationMode == .karaoke || animationMode == .glow)
+
+        TimelineView(.animation(minimumInterval: nil, paused: !needsPerFrame)) { _ in
             LyricLineView(
                 line: line,
                 isActive: isActive,
