@@ -183,21 +183,17 @@ public struct MiniOverlayView: View {
     }
 
     private func miniStatusText(_ message: String) -> some View {
-        TimelineView(.animation) { timeline in
-            let phase = timeline.date.timeIntervalSinceReferenceDate
-            let breathe = (sin(phase * 1.8) + 1) / 2
+        HStack(spacing: 6) {
+            Image(systemName: "music.note")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.45))
 
-            HStack(spacing: 6) {
-                Image(systemName: "music.note")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.3 + 0.25 * breathe))
-                    .scaleEffect(1.0 + 0.05 * breathe)
-
-                Text(message)
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.35 + 0.2 * breathe))
-            }
+            Text(message)
+                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .foregroundStyle(.white.opacity(0.5))
         }
+        // Render-server breathing — no per-frame main-thread work (see BreathingModifier).
+        .breathing()
     }
 
     private func effectiveLineEnd(for index: Int) -> TimeInterval {

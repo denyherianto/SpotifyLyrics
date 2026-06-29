@@ -11,10 +11,10 @@ import AppKit
 /// - Queue visibility
 ///
 /// Requires Accessibility permission (System Settings > Privacy > Accessibility).
-public final class AccessibilityBridge {
+public final class AccessibilityBridge: @unchecked Sendable {
 
     /// Playback info extracted from Spotify's Accessibility tree.
-    public struct AXPlaybackInfo: Equatable {
+    public struct AXPlaybackInfo: Equatable, Sendable {
         public let title: String
         public let artist: String
         public let isPlaying: Bool

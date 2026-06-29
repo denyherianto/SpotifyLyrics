@@ -15,17 +15,11 @@ public struct InstrumentalBreakView: View {
         VStack(spacing: 16) {
             Spacer()
 
-            // Musical note icon with breathing animation
-            TimelineView(.animation) { timeline in
-                let phase = timeline.date.timeIntervalSinceReferenceDate
-                let scale = 1.0 + 0.08 * sin(phase * 1.5)
-                let opacity = 0.4 + 0.2 * sin(phase * 1.5)
-
-                Image(systemName: "music.note")
-                    .font(.system(size: 32, weight: .light))
-                    .foregroundStyle(.white.opacity(opacity))
-                    .scaleEffect(scale)
-            }
+            // Musical note icon with render-server breathing (no per-frame main-thread cost).
+            Image(systemName: "music.note")
+                .font(.system(size: 32, weight: .light))
+                .foregroundStyle(.white.opacity(0.5))
+                .breathing(duration: 2.0, maxScale: 1.08, minOpacity: 0.6)
 
             // Countdown text
             Text(countdownText)
@@ -66,14 +60,10 @@ public struct MiniInstrumentalBreakView: View {
     public var body: some View {
         let seconds = Int(ceil(lyricsManager.instrumentalBreakCountdown))
         HStack(spacing: 6) {
-            TimelineView(.animation) { timeline in
-                let phase = timeline.date.timeIntervalSinceReferenceDate
-                let opacity = 0.4 + 0.3 * sin(phase * 2.0)
-
-                Image(systemName: "music.note")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.white.opacity(opacity))
-            }
+            Image(systemName: "music.note")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.white.opacity(0.6))
+                .breathing(duration: 1.5, maxScale: 1.0, minOpacity: 0.4)
 
             if seconds > 0 {
                 Text("\(seconds)s")

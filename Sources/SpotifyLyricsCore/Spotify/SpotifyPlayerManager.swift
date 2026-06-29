@@ -17,6 +17,20 @@ public final class SpotifyPlayerManager: ObservableObject {
     private var axPollTimer: Timer?
     private var lastTrackKey: String?
 
+    // MARK: - Poll Scheduling
+
+    /// True while a background AppleScript read is in flight — prevents overlapping
+    /// (and therefore contending) Apple-event round-trips if one runs long.
+    private var isAppleScriptPolling = false
+    /// True while a background Accessibility read is in flight.
+    private var isAXPolling = false
+    /// Counts skipped AppleScript ticks while idle (paused/stopped) so we can back the
+    /// expensive poll off to ~1.2s instead of running it 3×/sec for no benefit.
+    private var idlePollTicks = 0
+    /// Set by the fast AX poll on a play-state transition to force the next AppleScript
+    /// poll to run immediately (so resume refreshes position/track without backoff lag).
+    private var forceFullPoll = false
+
     // MARK: - Interpolation State
 
     private var lastPolledPosition: TimeInterval = 0
@@ -45,6 +59,9 @@ public final class SpotifyPlayerManager: ObservableObject {
 
     /// Timer for precise next-line switching.
     private var nextLineTimer: Timer?
+    /// Timestamp the live `nextLineTimer` is scheduled for, so repeated calls with the same
+    /// target don't tear down and rebuild the timer on every position tick.
+    private var scheduledNextLineTimestamp: TimeInterval?
     /// Callback invoked when the predictive timer fires at the next line's timestamp.
     public var onPredictiveLineSwitch: ((TimeInterval) -> Void)?
 
@@ -62,9 +79,11 @@ public final class SpotifyPlayerManager: ObservableObject {
         }
         poll()
 
-        // Supplementary Accessibility poll every 100ms for faster state detection
+        // Supplementary Accessibility poll every 200ms for fast play/pause + like detection.
+        // The full AX-tree traversal is comparatively expensive (many IPC calls), so it runs
+        // on a background thread and at a lower rate than position interpolation needs.
         axPollTimer?.invalidate()
-        axPollTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+        axPollTimer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.accessibilityPoll()
             }
@@ -78,22 +97,37 @@ public final class SpotifyPlayerManager: ObservableObject {
         axPollTimer = nil
         nextLineTimer?.invalidate()
         nextLineTimer = nil
+        scheduledNextLineTimestamp = nil
     }
 
-    /// Fast supplementary poll using Accessibility APIs (~1-5ms).
-    /// Updates play/pause state and like status between AppleScript polls.
+    /// Fast supplementary poll using Accessibility APIs. The (relatively expensive) AX-tree
+    /// traversal runs on a background thread so it never blocks SwiftUI rendering; results are
+    /// applied back on the main actor.
     private func accessibilityPoll() {
-        guard AccessibilityBridge.isAccessibilityEnabled else { return }
-        guard let info = accessibilityBridge.getPlaybackInfo() else { return }
+        guard AccessibilityBridge.isAccessibilityEnabled, !isAXPolling else { return }
+        isAXPolling = true
+        let axBridge = accessibilityBridge
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let info = axBridge.getPlaybackInfo()
+            await self?.applyAXPoll(info)
+        }
+    }
+
+    private func applyAXPoll(_ info: AccessibilityBridge.AXPlaybackInfo?) {
+        isAXPolling = false
+        guard let info else { return }
 
         // Guard every @Published assignment: `@Published` fires objectWillChange on *every*
         // set (even when the value is unchanged), so an unconditional assignment here would
-        // rebuild the entire SwiftUI overlay 10×/sec and make animations feel laggy.
+        // rebuild the entire SwiftUI overlay several×/sec and make animations feel laggy.
         if isLiked != info.isLiked { isLiked = info.isLiked }
 
         let newState: AppleScriptBridge.PlayerState = info.isPlaying ? .playing : .paused
         if newState != playerState {
             playerState = newState
+            // A state change (e.g. resume) should refresh the authoritative AppleScript read
+            // promptly even if we're currently in idle backoff.
+            forceFullPoll = true
         }
 
         // Use AX progress to cross-check interpolation drift
@@ -111,19 +145,41 @@ public final class SpotifyPlayerManager: ObservableObject {
     }
 
     private func poll() {
-        let pollStart = CFAbsoluteTimeGetCurrent()
+        guard !isAppleScriptPolling else { return }
 
-        guard let info = bridge.getPlaybackInfo() else {
-            isSpotifyRunning = false
-            currentTrack = nil
-            playerState = .stopped
+        // Idle backoff: while paused/stopped the position doesn't advance and the track
+        // rarely changes, so the expensive AppleScript read can run far less often. The AX
+        // poll flips `forceFullPoll` on resume so we never lag a real state change.
+        if playerState != .playing && !forceFullPoll {
+            idlePollTicks += 1
+            if idlePollTicks < 4 { return }   // run ~every 1.2s while idle
+        }
+        idlePollTicks = 0
+        forceFullPoll = false
+
+        isAppleScriptPolling = true
+        let bridge = self.bridge
+        Task.detached(priority: .userInitiated) { [weak self] in
+            let pollStart = CFAbsoluteTimeGetCurrent()
+            let info = bridge.getPlaybackInfo()
+            let pollEnd = CFAbsoluteTimeGetCurrent()
+            await self?.applyPoll(info, pollStart: pollStart, pollEnd: pollEnd)
+        }
+    }
+
+    private func applyPoll(_ info: AppleScriptBridge.PlaybackInfo?, pollStart: CFAbsoluteTime, pollEnd: CFAbsoluteTime) {
+        isAppleScriptPolling = false
+
+        guard let info else {
+            if isSpotifyRunning { isSpotifyRunning = false }
+            if currentTrack != nil { currentTrack = nil }
+            if playerState != .stopped { playerState = .stopped }
             lastPolledPosition = 0
             lastTrackKey = nil
             driftOffset = 0
             return
         }
 
-        let pollEnd = CFAbsoluteTimeGetCurrent()
         let pollMid = (pollStart + pollEnd) / 2
 
         // Drift correction: compare what we predicted vs what Spotify reports
@@ -142,7 +198,7 @@ public final class SpotifyPlayerManager: ObservableObject {
             }
         }
 
-        // Only assign @Published properties when they actually change — see accessibilityPoll().
+        // Only assign @Published properties when they actually change — see applyAXPoll().
         if !isSpotifyRunning { isSpotifyRunning = true }
         if playerState != info.state { playerState = info.state }
         if isShuffling != info.isShuffling { isShuffling = info.isShuffling }
@@ -171,18 +227,25 @@ public final class SpotifyPlayerManager: ObservableObject {
     ///
     /// - Parameter nextLineTimestamp: The absolute song timestamp of the next line.
     public func scheduleNextLineSwitch(at nextLineTimestamp: TimeInterval) {
+        // The position timer calls this several×/sec with the same target; only (re)build the
+        // timer when the target actually changes, otherwise we churn a Timer continuously.
+        if scheduledNextLineTimestamp == nextLineTimestamp && nextLineTimer != nil { return }
+
         nextLineTimer?.invalidate()
+        nextLineTimer = nil
+        scheduledNextLineTimestamp = nil
 
         guard playerState == .playing else { return }
 
-        let currentPos = playbackPosition
-        let delay = nextLineTimestamp - currentPos
-
+        let delay = nextLineTimestamp - playbackPosition
         guard delay > 0 && delay < 30 else { return }
 
+        scheduledNextLineTimestamp = nextLineTimestamp
         nextLineTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
+                self.nextLineTimer = nil
+                self.scheduledNextLineTimestamp = nil
                 self.onPredictiveLineSwitch?(self.playbackPosition)
             }
         }
@@ -196,6 +259,8 @@ public final class SpotifyPlayerManager: ObservableObject {
         lastPollTime = CFAbsoluteTimeGetCurrent()
         driftOffset = 0
         nextLineTimer?.invalidate()
+        nextLineTimer = nil
+        scheduledNextLineTimestamp = nil
     }
 
     public func playPause() {
@@ -203,6 +268,8 @@ public final class SpotifyPlayerManager: ObservableObject {
         playerState = (playerState == .playing) ? .paused : .playing
         if playerState == .paused {
             nextLineTimer?.invalidate()
+            nextLineTimer = nil
+            scheduledNextLineTimestamp = nil
         }
     }
 

@@ -1,6 +1,6 @@
 import Foundation
 
-public struct TrackInfo: Equatable {
+public struct TrackInfo: Equatable, Sendable {
     public let title: String
     public let artist: String
     public let album: String

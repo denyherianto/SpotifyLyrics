@@ -314,23 +314,55 @@ public struct LyricsOverlayView: View {
     }
 
     private func statusView(_ message: String) -> some View {
-        TimelineView(.animation) { timeline in
-            let phase = timeline.date.timeIntervalSinceReferenceDate
-            let breathe = (sin(phase * 1.8) + 1) / 2 // 0…1
+        VStack(spacing: 10) {
+            Image(systemName: "music.note.list")
+                .font(.system(size: 28, weight: .light))
+                .foregroundStyle(.white.opacity(0.45))
 
-            VStack(spacing: 10) {
-                Image(systemName: "music.note.list")
-                    .font(.system(size: 28, weight: .light))
-                    .foregroundStyle(.white.opacity(0.3 + 0.25 * breathe))
-                    .scaleEffect(1.0 + 0.06 * breathe)
-
-                Text(message)
-                    .font(.system(size: 15, weight: .medium, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.4 + 0.2 * breathe))
-            }
+            Text(message)
+                .font(.system(size: 15, weight: .medium, design: .rounded))
+                .foregroundStyle(.white.opacity(0.55))
         }
         .padding(.horizontal, 24)
         .padding(.vertical, 16)
+        // Render-server breathing — no per-frame main-thread re-evaluation. These idle states
+        // (waiting / loading / no lyrics) can persist for a whole track, so a TimelineView here
+        // would burn the main thread at the display refresh rate for purely decorative motion.
+        .breathing()
+    }
+}
+
+// MARK: - Render-server breathing pulse
+
+/// A gentle scale+opacity "breathing" loop driven entirely by Core Animation (the render
+/// server), so it costs nothing on the main thread — unlike `TimelineView(.animation)`, which
+/// re-evaluates the SwiftUI body every frame. Use for purely decorative, always-on motion.
+struct BreathingModifier: ViewModifier {
+    var duration: Double = 1.7
+    var minScale: CGFloat = 1.0
+    var maxScale: CGFloat = 1.05
+    var minOpacity: Double = 0.7
+    var maxOpacity: Double = 1.0
+
+    @State private var on = false
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(on ? maxScale : minScale)
+            .opacity(on ? maxOpacity : minOpacity)
+            .onAppear {
+                withAnimation(.easeInOut(duration: duration).repeatForever(autoreverses: true)) {
+                    on = true
+                }
+            }
+    }
+}
+
+extension View {
+    func breathing(duration: Double = 1.7, minScale: CGFloat = 1.0, maxScale: CGFloat = 1.05,
+                   minOpacity: Double = 0.7, maxOpacity: Double = 1.0) -> some View {
+        modifier(BreathingModifier(duration: duration, minScale: minScale, maxScale: maxScale,
+                                   minOpacity: minOpacity, maxOpacity: maxOpacity))
     }
 }
 

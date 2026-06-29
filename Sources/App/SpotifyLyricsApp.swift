@@ -344,10 +344,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         playerManager.startPolling()
 
-        // Position tracking: fixed-interval fallback at 100ms
-        Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+        // Position tracking: fixed-interval fallback at 200ms. Exact line boundaries are hit by
+        // the predictive timer (onPredictiveLineSwitch); this is only a coarse backstop and to
+        // drive the instrumental-break countdown, so a lower rate is plenty. Skipped entirely
+        // while not playing — the position is frozen, so there's nothing to recompute.
+        Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self else { return }
+                guard self.playerManager.playerState == .playing,
+                      self.lyricsManager.hasLyrics else { return }
                 let pos = self.playerManager.playbackPosition
                 self.lyricsManager.updateCurrentLine(at: pos)
                 self.lyricsManager.updateInstrumentalBreak(at: pos)

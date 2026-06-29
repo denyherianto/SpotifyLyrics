@@ -263,13 +263,15 @@ public final class LyricsManager: ObservableObject {
     public func updateCurrentLine(at position: TimeInterval) {
         guard !currentLines.isEmpty else { return }
 
-        var index = 0
-        for (i, line) in currentLines.enumerated() {
-            if line.timestamp <= position {
-                index = i
-            } else {
-                break
-            }
+        // Incremental search from the current index. Normal playback advances by one line,
+        // so this is O(1) per call instead of re-scanning from the start; seeks walk a few
+        // steps either direction. (Called several times per second from the position timer.)
+        var index = min(currentLineIndex, currentLines.count - 1)
+        while index + 1 < currentLines.count && currentLines[index + 1].timestamp <= position {
+            index += 1
+        }
+        while index > 0 && currentLines[index].timestamp > position {
+            index -= 1
         }
 
         if index != currentLineIndex {

@@ -1,11 +1,15 @@
 import Foundation
+import AppKit
 
-public final class AppleScriptBridge {
-    public enum PlayerState: String {
+/// Stateless bridge to Spotify via AppleScript. Holds no mutable state, so it is safe to
+/// invoke from any thread — callers run `getPlaybackInfo()` off the main thread to avoid
+/// blocking SwiftUI rendering while the (slow) Apple-event round-trip completes.
+public final class AppleScriptBridge: @unchecked Sendable {
+    public enum PlayerState: String, Sendable {
         case playing, paused, stopped, unknown
     }
 
-    public struct PlaybackInfo {
+    public struct PlaybackInfo: Sendable {
         public let track: TrackInfo
         public let state: PlayerState
         public let position: TimeInterval
@@ -26,15 +30,21 @@ public final class AppleScriptBridge {
 
     public init() {}
 
+    /// Cheap, in-process check (no Apple event) for whether Spotify is running.
+    public static var isSpotifyRunning: Bool {
+        NSWorkspace.shared.runningApplications.contains {
+            $0.bundleIdentifier == "com.spotify.client"
+        }
+    }
+
     public func getPlaybackInfo() -> PlaybackInfo? {
-        // Single combined script: checks if Spotify is running, then gets info.
-        // Returns nil if Spotify is not running (avoids launching it).
+        // Skip the AppleScript entirely when Spotify isn't running. This avoids both the
+        // Apple-event round-trip and any chance of launching Spotify, and is essentially free
+        // compared to the old `tell System Events ... exists process` probe.
+        guard Self.isSpotifyRunning else { return nil }
+
+        // Single combined script reads everything in one round-trip.
         let script = """
-        tell application "System Events"
-            if not (exists process "Spotify") then
-                return "NOT_RUNNING"
-            end if
-        end tell
         tell application "Spotify"
             if player state is stopped then
                 return "stopped|||||||0|||0"
@@ -53,9 +63,6 @@ public final class AppleScriptBridge {
         """
 
         guard let result = runAppleScript(script) else { return nil }
-        if result.trimmingCharacters(in: .whitespacesAndNewlines) == "NOT_RUNNING" {
-            return nil
-        }
         let parts = result.components(separatedBy: "|||")
         guard parts.count >= 6 else { return nil }
 
