@@ -390,6 +390,11 @@ public final class LyricsManager: ObservableObject {
         enrichment = [:]
         lyricsOptions = []
         selectedOptionID = nil
+        // Forget persisted per-track source selections.
+        let defaults = UserDefaults.standard
+        for dkey in defaults.dictionaryRepresentation().keys where dkey.hasPrefix("lyricsSelection.") {
+            defaults.removeObject(forKey: dkey)
+        }
         // Clear disk cache
         Task.detached(priority: .utility) {
             let dir = Self.diskCacheDirectory
