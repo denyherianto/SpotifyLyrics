@@ -212,6 +212,26 @@ struct MenuBarView: View {
                             .controlSize(.small)
                             .labelsHidden()
                     }
+                    if lyricsManager.lyricsOptions.count > 1 {
+                        settingsRow("Lyrics Source") {
+                            Picker("", selection: Binding(
+                                get: {
+                                    lyricsManager.selectedOptionID
+                                        ?? lyricsManager.lyricsOptions.first?.id
+                                        ?? -1
+                                },
+                                set: { lyricsManager.selectOption($0) }
+                            )) {
+                                ForEach(lyricsManager.lyricsOptions) { option in
+                                    Text(option.menuLabel).tag(option.id)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .labelsHidden()
+                            .controlSize(.small)
+                            .frame(maxWidth: 150)
+                        }
+                    }
                     settingsRow("Romanization") {
                         Toggle("", isOn: $overlayController.showRomanization)
                             .toggleStyle(.switch)

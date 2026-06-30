@@ -13,6 +13,11 @@ public final class LyricsManager: ObservableObject {
     @Published public var instrumentalBreakCountdown: TimeInterval = 0
     @Published public var nextVocalLineText: String?
 
+    /// All lyrics candidates for the current track, ranked best-first.
+    @Published public var lyricsOptions: [LyricsOption] = []
+    /// The id of the option currently shown (matches one of `lyricsOptions`).
+    @Published public var selectedOptionID: Int?
+
     /// Minimum gap (seconds) between current line end and next line start to trigger a break.
     public static let instrumentalBreakThreshold: TimeInterval = 8.0
     /// Seconds before the next vocal line to dismiss the break view.
@@ -26,8 +31,11 @@ public final class LyricsManager: ObservableObject {
 
     private let lrcLib = LRCLibProvider()
     private let speechProvider = SpeechRecognitionProvider()
-    private var cache: [String: [LyricLine]] = [:]
+    private var optionsCache: [String: [LyricsOption]] = [:]
     private var enrichmentCache: [String: [Int: LineEnrichment]] = [:]
+    /// Cache key + track for the lyrics currently displayed (needed when switching source).
+    private var currentKey: String?
+    private var currentTrack: TrackInfo?
     private var enrichmentTask: Task<Void, Never>?
     private var summaryTask: Task<Void, Never>?
     private let enrichmentCoordinator = EnrichmentCoordinator()
@@ -48,26 +56,44 @@ public final class LyricsManager: ObservableObject {
         return Self.diskCacheDirectory.appendingPathComponent("\(safe).json")
     }
 
-    private nonisolated func loadFromDisk(key: String) -> [LyricLine]? {
+    private nonisolated func loadFromDisk(key: String) -> [LyricsOption]? {
         let safe = key.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? key
         let caches = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
         let url = caches.appendingPathComponent("SpotifyLyrics/lyrics/\(safe).json")
         guard let data = try? Data(contentsOf: url) else { return nil }
-        return try? JSONDecoder().decode([LyricLine].self, from: data)
+        return try? JSONDecoder().decode([LyricsOption].self, from: data)
     }
 
-    private nonisolated func saveToDisk(lines: [LyricLine], key: String) {
+    private nonisolated func saveToDisk(options: [LyricsOption], key: String) {
         let url = diskCacheURL(for: key)
         Task.detached(priority: .utility) {
-            guard let data = try? JSONEncoder().encode(lines) else { return }
+            guard let data = try? JSONEncoder().encode(options) else { return }
             try? data.write(to: url, options: .atomic)
         }
+    }
+
+    // MARK: - Per-track source selection (persisted)
+
+    private nonisolated func selectionDefaultsKey(for key: String) -> String {
+        let safe = key.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? key
+        return "lyricsSelection.\(safe)"
+    }
+
+    private func persistedSelection(for key: String) -> Int? {
+        let dk = selectionDefaultsKey(for: key)
+        guard UserDefaults.standard.object(forKey: dk) != nil else { return nil }
+        return UserDefaults.standard.integer(forKey: dk)
+    }
+
+    private func persistSelection(_ id: Int, for key: String) {
+        UserDefaults.standard.set(id, forKey: selectionDefaultsKey(for: key))
     }
 
     public init() {}
 
     public func fetchLyrics(for track: TrackInfo) {
         let key = track.cacheKey
+        currentTrack = track
 
         // Cancel any in-flight fetch and enrichment work
         fetchTask?.cancel()
@@ -77,19 +103,17 @@ public final class LyricsManager: ObservableObject {
         summaryTask = nil
 
         // L1: In-memory cache (synchronous, no race)
-        if let cached = cache[key] {
+        if let cached = optionsCache[key], !cached.isEmpty {
             isLoading = false
-            currentLines = cached
-            hasLyrics = !cached.isEmpty
-            currentLineIndex = 0
-            startEnrichment(for: key)
-            startSummary(track: track)
+            applyOptions(cached, key: key, track: track)
             return
         }
 
         // Reset state immediately for the new song
         isLoading = true
         currentLines = []
+        lyricsOptions = []
+        selectedOptionID = nil
         enrichment = [:]
         songSummary = nil
         hasLyrics = false
@@ -104,36 +128,72 @@ public final class LyricsManager: ObservableObject {
                 self.loadFromDisk(key: key)
             }).value, !diskCached.isEmpty {
                 try Task.checkCancellation()
-                self.cache[key] = diskCached
-                self.currentLines = diskCached
-                self.hasLyrics = true
+                self.optionsCache[key] = diskCached
+                self.applyOptions(diskCached, key: key, track: track)
                 self.isLoading = false
-                self.currentLineIndex = 0
-                self.startEnrichment(for: key)
-                self.startSummary(track: track)
                 return
             }
 
             try Task.checkCancellation()
 
-            let title = track.title
-            let artist = track.artist
-
-            let lines = await lrcLib.fetchLyrics(title: title, artist: artist)
+            let options = await lrcLib.fetchOptions(
+                title: track.title, artist: track.artist, trackDuration: track.duration
+            )
 
             try Task.checkCancellation()
 
-            if let lines {
-                self.cache[key] = lines
-                self.saveToDisk(lines: lines, key: key)
-                self.currentLines = lines
-                self.hasLyrics = true
-                self.startEnrichment(for: key)
-                self.startSummary(track: track)
+            if !options.isEmpty {
+                self.optionsCache[key] = options
+                self.saveToDisk(options: options, key: key)
+                self.applyOptions(options, key: key, track: track)
             }
 
             self.isLoading = false
         }
+    }
+
+    /// Publish a freshly-fetched (or cached) option list and display the preferred one.
+    private func applyOptions(_ options: [LyricsOption], key: String, track: TrackInfo) {
+        lyricsOptions = options
+        currentKey = key
+        apply(preferredOption(in: options, key: key), key: key, track: track)
+    }
+
+    /// The option to show by default: the user's last choice for this track if it
+    /// still exists, otherwise the top-ranked candidate.
+    private func preferredOption(in options: [LyricsOption], key: String) -> LyricsOption {
+        if let savedID = persistedSelection(for: key),
+           let match = options.first(where: { $0.id == savedID }) {
+            return match
+        }
+        return options[0]
+    }
+
+    /// Display a specific option and kick off enrichment/summary for it.
+    private func apply(_ option: LyricsOption, key: String, track: TrackInfo) {
+        selectedOptionID = option.id
+        currentLines = option.lines
+        hasLyrics = !option.lines.isEmpty
+        currentLineIndex = 0
+        startEnrichment(for: key)
+        startSummary(track: track)
+    }
+
+    /// Switch the displayed lyrics to another candidate and remember the choice.
+    public func selectOption(_ id: Int) {
+        guard id != selectedOptionID,
+              let key = currentKey,
+              let track = currentTrack,
+              let option = lyricsOptions.first(where: { $0.id == id }) else { return }
+
+        enrichmentTask?.cancel()
+        enrichmentTask = nil
+        enrichment = [:]
+        summaryTask?.cancel()
+        summaryTask = nil
+
+        persistSelection(id, for: key)
+        apply(option, key: key, track: track)
     }
 
     /// Attempt speech recognition on captured audio as a last-resort lyrics source.
@@ -151,7 +211,14 @@ public final class LyricsManager: ObservableObject {
             captureStartPosition: captureStartPosition
         ) {
             guard !Task.isCancelled else { return }
-            cache[cacheKey] = lines
+            let option = LyricsOption(
+                id: -1, trackName: "", artistName: "", albumName: nil,
+                duration: nil, isSynced: true, lines: lines
+            )
+            optionsCache[cacheKey] = [option]
+            lyricsOptions = [option]
+            selectedOptionID = option.id
+            currentKey = cacheKey
             currentLines = lines
             hasLyrics = true
             startEnrichment(for: cacheKey)
@@ -162,17 +229,14 @@ public final class LyricsManager: ObservableObject {
 
     /// Re-run enrichment for the current lyrics (e.g. when settings change).
     public func refreshEnrichment() {
-        guard hasLyrics, !currentLines.isEmpty else { return }
+        guard hasLyrics, !currentLines.isEmpty, let key = currentKey else { return }
         // Cancel any in-flight enrichment
         enrichmentTask?.cancel()
         enrichmentTask = nil
         enrichment = [:]
-        // Find lyrics cache key and restart — the new enrichment cache key
-        // (which encodes current settings) will naturally miss stale entries.
-        for (key, cached) in cache where cached == currentLines {
-            startEnrichment(for: key)
-            return
-        }
+        // Restart — the new enrichment cache key (which encodes current settings)
+        // will naturally miss stale entries.
+        startEnrichment(for: key)
     }
 
     private func startEnrichment(for lyricsKey: String) {
@@ -250,16 +314,6 @@ public final class LyricsManager: ObservableObject {
         "\(lyricsKey)|r:\(showRomanization)|t:\(showTranslation)|ai:\(aiTranslationMode.rawValue)|\(targetLanguage)"
     }
 
-    private func enrichmentCacheKey(from lines: [LyricLine]) -> String {
-        // Reconstruct the lyrics cache key by finding it
-        for (key, cached) in cache where cached == lines {
-            return enrichmentCacheKey(for: key)
-        }
-        // Fallback: use hash of text content
-        let hash = lines.map(\.text).joined(separator: "|").hashValue
-        return enrichmentCacheKey(for: "hash:\(hash)")
-    }
-
     public func updateCurrentLine(at position: TimeInterval) {
         guard !currentLines.isEmpty else { return }
 
@@ -331,9 +385,11 @@ public final class LyricsManager: ObservableObject {
     }
 
     public func clearCache() {
-        cache.removeAll()
+        optionsCache.removeAll()
         enrichmentCache.removeAll()
         enrichment = [:]
+        lyricsOptions = []
+        selectedOptionID = nil
         // Clear disk cache
         Task.detached(priority: .utility) {
             let dir = Self.diskCacheDirectory
