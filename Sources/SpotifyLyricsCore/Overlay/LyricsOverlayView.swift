@@ -44,19 +44,8 @@ public struct LyricsOverlayView: View {
             } else if !lyricsManager.hasLyrics {
                 statusView("No lyrics available")
             } else {
-                ZStack {
-                    lyricsScrollView
-                        .opacity(lyricsManager.isInstrumentalBreak ? 0 : 1)
-
-                    if lyricsManager.isInstrumentalBreak {
-                        InstrumentalBreakView(
-                            lyricsManager: lyricsManager,
-                            playerManager: playerManager
-                        )
-                        .transition(.opacity)
-                    }
-                }
-                .animation(.easeInOut(duration: 0.5), value: lyricsManager.isInstrumentalBreak)
+                lyricsScrollView
+                    .animation(.easeInOut(duration: 0.5), value: lyricsManager.isInstrumentalBreak)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -296,24 +285,47 @@ public struct LyricsOverlayView: View {
     @ViewBuilder
     private func lineView(index: Int, line: LyricLine) -> some View {
         let activeIndex = displayedLineIndex
-        let isActive = index == activeIndex
+        let showsLyricLine = LyricLineVisualStyle.showsLyricLine(
+            index: index,
+            activeIndex: activeIndex,
+            isInstrumentalBreak: lyricsManager.isInstrumentalBreak
+        )
+        let showsInstrumentalBreak = LyricLineVisualStyle.showsInlineInstrumentalBreak(
+            index: index,
+            activeIndex: activeIndex,
+            isInstrumentalBreak: lyricsManager.isInstrumentalBreak
+        )
+        let isActive = LyricLineVisualStyle.isLineActive(
+            index: index,
+            activeIndex: activeIndex,
+            isInstrumentalBreak: lyricsManager.isInstrumentalBreak
+        )
         let lineEnrichment = lyricsManager.enrichment[index]
         let shareHandler: (LyricLine, LineEnrichment?) -> Void = { line, enrichment in
             generateCardPreview(line: line, enrichment: enrichment)
         }
         let needsPerFrame = isActive && (animationMode == .karaoke || animationMode == .glow)
 
-        TimelineView(.animation(minimumInterval: nil, paused: !needsPerFrame)) { _ in
-            LyricLineView(
-                line: line,
-                isActive: isActive,
-                offset: index - activeIndex,
-                mode: animationMode,
-                position: playerManager.playbackPosition,
-                lineEnd: lineEnd(at: index),
-                enrichment: lineEnrichment,
-                onShareAsCard: shareHandler
-            )
+        VStack(spacing: 8) {
+            if showsLyricLine {
+                TimelineView(.animation(minimumInterval: nil, paused: !needsPerFrame)) { _ in
+                    LyricLineView(
+                        line: line,
+                        isActive: isActive,
+                        offset: index - activeIndex,
+                        mode: animationMode,
+                        position: playerManager.playbackPosition,
+                        lineEnd: lineEnd(at: index),
+                        enrichment: lineEnrichment,
+                        onShareAsCard: shareHandler
+                    )
+                }
+            }
+
+            if showsInstrumentalBreak {
+                InlineInstrumentalBreakLineView(lyricsManager: lyricsManager)
+                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
+            }
         }
     }
 

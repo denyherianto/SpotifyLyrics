@@ -5,10 +5,16 @@ import SwiftUI
 public struct InstrumentalBreakView: View {
     @ObservedObject var lyricsManager: LyricsManager
     @ObservedObject var playerManager: SpotifyPlayerManager
+    let showsUpcomingLinePreview: Bool
 
-    public init(lyricsManager: LyricsManager, playerManager: SpotifyPlayerManager) {
+    public init(
+        lyricsManager: LyricsManager,
+        playerManager: SpotifyPlayerManager,
+        showsUpcomingLinePreview: Bool = true
+    ) {
         self.lyricsManager = lyricsManager
         self.playerManager = playerManager
+        self.showsUpcomingLinePreview = showsUpcomingLinePreview
     }
 
     public var body: some View {
@@ -28,7 +34,7 @@ public struct InstrumentalBreakView: View {
                 .contentTransition(.numericText())
 
             // Upcoming line preview
-            if let nextText = lyricsManager.nextVocalLineText {
+            if showsUpcomingLinePreview, let nextText = lyricsManager.nextVocalLineText {
                 Text(nextText)
                     .font(.system(size: 18, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.25))
@@ -43,9 +49,44 @@ public struct InstrumentalBreakView: View {
     }
 
     private var countdownText: String {
-        let seconds = Int(ceil(lyricsManager.instrumentalBreakCountdown))
-        if seconds <= 0 { return "" }
-        return "Next line in \(seconds)s..."
+        LyricLineVisualStyle.instrumentalCountdownText(seconds: lyricsManager.instrumentalBreakCountdown)
+    }
+}
+
+/// Inline break indicator rendered in the lyrics list during full-overlay instrumental gaps.
+public struct InlineInstrumentalBreakLineView: View {
+    @ObservedObject var lyricsManager: LyricsManager
+
+    public init(lyricsManager: LyricsManager) {
+        self.lyricsManager = lyricsManager
+    }
+
+    public var body: some View {
+        let countdownText = LyricLineVisualStyle.instrumentalCountdownText(seconds: lyricsManager.instrumentalBreakCountdown)
+        HStack(spacing: 8) {
+            Image(systemName: "music.note")
+                .font(.system(size: 22, weight: .light))
+                .foregroundStyle(.white.opacity(0.72))
+                .breathing(duration: 2.0, maxScale: 1.08, minOpacity: 0.6)
+
+            if !countdownText.isEmpty {
+                Text(countdownText)
+                    .font(.system(size: 18, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.58))
+                    .contentTransition(.numericText())
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.vertical, 10)
+        .padding(.horizontal, 8)
+        .accessibilityLabel(accessibilityText(countdownText: countdownText))
+    }
+
+    private func accessibilityText(countdownText: String) -> String {
+        if !countdownText.isEmpty {
+            return "Instrumental break, \(countdownText) until next line"
+        }
+        return "Instrumental break"
     }
 }
 
@@ -58,15 +99,15 @@ public struct MiniInstrumentalBreakView: View {
     }
 
     public var body: some View {
-        let seconds = Int(ceil(lyricsManager.instrumentalBreakCountdown))
+        let countdownText = LyricLineVisualStyle.instrumentalCountdownText(seconds: lyricsManager.instrumentalBreakCountdown)
         HStack(spacing: 6) {
             Image(systemName: "music.note")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.white.opacity(0.6))
                 .breathing(duration: 1.5, maxScale: 1.0, minOpacity: 0.4)
 
-            if seconds > 0 {
-                Text("\(seconds)s")
+            if !countdownText.isEmpty {
+                Text(countdownText)
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
                     .foregroundStyle(.white.opacity(0.5))
                     .contentTransition(.numericText())

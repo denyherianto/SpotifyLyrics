@@ -22,6 +22,8 @@ public final class LyricsManager: ObservableObject {
     public static let instrumentalBreakThreshold: TimeInterval = 8.0
     /// Seconds before the next vocal line to dismiss the break view.
     public static let breakDismissLeadTime: TimeInterval = 1.0
+    /// Fallback vocal-line duration for timestamp-only LRC, which has no explicit line end.
+    public static let estimatedLineDuration: TimeInterval = 5.0
 
     public var showRomanization = false
     public var showTranslation = false
@@ -349,17 +351,17 @@ public final class LyricsManager: ObservableObject {
             return
         }
 
-        let currentLine = currentLines[currentLineIndex]
-        let currentEnd = currentLine.endTime ?? (currentLineIndex + 1 < currentLines.count
-            ? currentLines[currentLineIndex + 1].timestamp
-            : currentLine.timestamp + 5)
-
         guard currentLineIndex + 1 < currentLines.count else {
             if isInstrumentalBreak { isInstrumentalBreak = false }
             return
         }
 
+        let currentLine = currentLines[currentLineIndex]
         let nextLine = currentLines[currentLineIndex + 1]
+        let currentEnd = currentLine.endTime ?? min(
+            currentLine.timestamp + Self.estimatedLineDuration,
+            nextLine.timestamp
+        )
         let gap = nextLine.timestamp - currentEnd
 
         // Only consider it a break if gap exceeds threshold and we're past the current line's end

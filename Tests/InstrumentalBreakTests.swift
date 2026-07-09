@@ -108,19 +108,31 @@ func testInstrumentalBreak() {
         print("  ✓ Countdown calculation accurate")
     }
 
-    // Break without explicit endTime uses next line start as current end
+    // Break without explicit endTime estimates the current line duration
     do {
         let manager = LyricsManager()
         manager.currentLines = [
             LyricLine(timestamp: 0.0, text: "First"),
             LyricLine(timestamp: 20.0, text: "Way later"),
         ]
-        // Without endTime, currentEnd = next line start = 20.0
-        // gap = 20 - 20 = 0, so no break (the gap is effectively 0)
         manager.updateCurrentLine(at: 5.0)
         manager.updateInstrumentalBreak(at: 5.0)
-        check(!manager.isInstrumentalBreak, "no endTime: gap is 0")
-        print("  ✓ No endTime uses next line as end (no gap)")
+        check(manager.isInstrumentalBreak, "no endTime: long timestamp gap triggers break")
+        checkEqual(manager.nextVocalLineText, "Way later", "no endTime: next line text")
+        print("  ✓ No endTime estimates line end for long gaps")
+    }
+
+    // No break before the estimated line duration elapses
+    do {
+        let manager = LyricsManager()
+        manager.currentLines = [
+            LyricLine(timestamp: 0.0, text: "First"),
+            LyricLine(timestamp: 20.0, text: "Way later"),
+        ]
+        manager.updateCurrentLine(at: 3.0)
+        manager.updateInstrumentalBreak(at: 3.0)
+        check(!manager.isInstrumentalBreak, "no endTime: no break before estimated line end")
+        print("  ✓ No endTime waits for estimated line end")
     }
 
     // Break clears when moving to a non-break region
