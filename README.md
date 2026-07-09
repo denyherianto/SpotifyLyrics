@@ -16,6 +16,12 @@
 
 ---
 
+https://github.com/user-attachments/assets/9b579c50-f9ef-4d36-8304-79a0a795a289
+
+https://github.com/user-attachments/assets/99dc5c35-069d-4a24-8eff-bfd220ca7fa8
+
+---
+
 SpotifyLyrics is a lightweight macOS menu bar app that puts synced lyrics on top of Spotify as a polished, always-available overlay. It feels like karaoke mode for your desktop: live scrolling, word-level fill, translations, romanization, music controls, shareable lyric cards, and a tiny subtitle mode when you want your screen back.
 
 No Spotify login. No Spotify Web API. No external dependencies. Just Swift, Apple frameworks, LRCLIB, and the Spotify desktop app.
