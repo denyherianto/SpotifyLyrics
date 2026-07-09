@@ -48,6 +48,8 @@ struct TestMain {
         testAppVersionDisplay()
         testPlaybackInfo()
         testOverlaySize()
+        testOverlayActiveLineStyle()
+        testOverlayRecenterButtonPresentation()
         testSettingsPersistence()
         testSeekBarFormatting()
         testAnimationMode()

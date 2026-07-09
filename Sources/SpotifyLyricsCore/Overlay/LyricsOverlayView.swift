@@ -104,18 +104,23 @@ public struct LyricsOverlayView: View {
                         Button {
                             scrollBackToCurrent()
                         } label: {
-                            HStack(spacing: 3) {
+                            HStack(spacing: OverlayRecenterButtonPresentation.showsTitle(for: overlaySize) ? 3 : 0) {
                                 Image(systemName: "arrow.uturn.backward")
                                     .font(.system(size: 10, weight: .semibold))
-                                Text("Current")
-                                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                if OverlayRecenterButtonPresentation.showsTitle(for: overlaySize) {
+                                    Text("Current")
+                                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                                }
                             }
                             .foregroundStyle(.white)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
+                            .frame(width: OverlayRecenterButtonPresentation.showsTitle(for: overlaySize) ? nil : 24, height: 24)
+                            .padding(.horizontal, OverlayRecenterButtonPresentation.showsTitle(for: overlaySize) ? 8 : 0)
+                            .padding(.vertical, OverlayRecenterButtonPresentation.showsTitle(for: overlaySize) ? 4 : 0)
                             .background(Capsule().fill(.white.opacity(0.15)))
                         }
                         .buttonStyle(PillButtonStyle())
+                        .accessibilityLabel(OverlayRecenterButtonPresentation.accessibilityLabel)
+                        .help(OverlayRecenterButtonPresentation.accessibilityLabel)
                         .frame(maxWidth: .infinity, alignment: .trailing)
                         .transition(.opacity)
                     }

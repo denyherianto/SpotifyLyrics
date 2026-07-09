@@ -32,7 +32,7 @@ public struct LyricLineView: View {
             if let rom = enrichment?.romanization {
                 Text(rom)
                     .font(.system(size: enrichmentFontSize, weight: .regular, design: .rounded))
-                    .foregroundStyle(.white.opacity(isActive ? 0.6 : 0.4))
+                    .foregroundStyle(.white.opacity(LyricLineVisualStyle.enrichmentOpacity(isActive: isActive)))
                     .shadow(color: .black.opacity(0.4), radius: 2, x: 0, y: 1)
                     .transition(.asymmetric(
                         insertion: .opacity.combined(with: .move(edge: .top)).combined(with: .scale(scale: 0.95)),
@@ -45,7 +45,7 @@ public struct LyricLineView: View {
             if let trans = enrichment?.translation {
                 Text(trans)
                     .font(.system(size: enrichmentFontSize, weight: .regular, design: .rounded))
-                    .foregroundStyle(.white.opacity(isActive ? 0.55 : 0.35))
+                    .foregroundStyle(.white.opacity(LyricLineVisualStyle.enrichmentOpacity(isActive: isActive)))
                     .shadow(color: .black.opacity(0.4), radius: 2, x: 0, y: 1)
                     .transition(.asymmetric(
                         insertion: .opacity.combined(with: .move(edge: .bottom)).combined(with: .scale(scale: 0.95)),
@@ -131,7 +131,7 @@ public struct LyricLineView: View {
     /// Base text color. Karaoke's active line is dimmed because its brightness comes from the
     /// fill overlay; every other case uses the standard foreground color.
     private var textBaseColor: Color {
-        if isActive && mode == .karaoke { return .white.opacity(0.4) }
+        if isActive && mode == .karaoke { return .white }
         return foregroundColor
     }
 
@@ -146,18 +146,14 @@ public struct LyricLineView: View {
     private var enrichmentFontSize: CGFloat { 13 }
 
     private var scale: CGFloat {
-        if mode == .smooth {
-            return isActive ? 1.06 : 0.88
-        }
-        guard isActive else { return 0.86 }
-        return mode == .spring ? 1.15 : 1.10
+        CGFloat(LyricLineVisualStyle.scale(isActive: isActive, mode: mode))
     }
 
     private var foregroundColor: Color {
         if isHovered && !isActive {
             return .white.opacity(0.9)
         }
-        return isActive ? .white : .white.opacity(0.7)
+        return .white.opacity(LyricLineVisualStyle.mainTextOpacity(isActive: isActive))
     }
 
     private var lineOpacity: Double {

@@ -124,13 +124,13 @@ public struct MiniOverlayView: View {
                     if let rom = enrichment.romanization {
                         Text(rom)
                             .font(.system(size: 10, weight: .regular, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(.white)
                     }
                     miniLyricText(line: line)
                     if let trans = enrichment.translation {
                         Text(trans)
                             .font(.system(size: 10, weight: .regular, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.45))
+                            .foregroundStyle(.white)
                     }
                 }
             }
@@ -139,13 +139,13 @@ public struct MiniOverlayView: View {
                 if let rom = enrichment.romanization {
                     Text(rom)
                         .font(.system(size: 10, weight: .regular, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.5))
+                        .foregroundStyle(.white)
                 }
                 miniLyricText(line: line)
                 if let trans = enrichment.translation {
                     Text(trans)
                         .font(.system(size: 10, weight: .regular, design: .rounded))
-                        .foregroundStyle(.white.opacity(0.45))
+                        .foregroundStyle(.white)
                 }
             }
         }
