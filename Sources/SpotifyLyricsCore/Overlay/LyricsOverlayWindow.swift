@@ -51,7 +51,7 @@ public final class LyricsOverlayWindow {
         hostingView.autoresizingMask = [.width, .height]
         panel.contentView?.addSubview(hostingView)
 
-        let frameName = size.isMini ? "LyricsOverlayMini" : "LyricsOverlay"
+        let frameName = size.frameAutosaveName
         panel.setFrameUsingName(frameName)
         panel.setFrameAutosaveName(frameName)
 
@@ -75,8 +75,7 @@ public final class LyricsOverlayWindow {
         panel.setFrame(NSRect(x: newX, y: newY, width: width, height: height), display: true, animate: true)
 
         // Set frame autosave for the new mode
-        let frameName = size.isMini ? "LyricsOverlayMini" : "LyricsOverlay"
-        panel.setFrameAutosaveName(frameName)
+        panel.setFrameAutosaveName(size.frameAutosaveName)
 
         // Insert new hosting view
         let hostingView = NSHostingView(rootView: view)
@@ -117,6 +116,7 @@ public final class LyricsOverlayWindow {
         let newX = currentFrame.midX - width / 2
         let newY = currentFrame.midY - height / 2
         panel.setFrame(NSRect(x: newX, y: newY, width: width, height: height), display: true, animate: true)
+        panel.setFrameAutosaveName(size.frameAutosaveName)
     }
 
     public func close() {

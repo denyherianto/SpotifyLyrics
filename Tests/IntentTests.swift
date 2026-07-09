@@ -71,7 +71,8 @@ func testIntents() {
     // OverlaySize has all expected cases
     do {
         let cases = OverlaySize.allCases
-        check(cases.count >= 4, "OverlaySize: at least 4 cases (mini, small, medium, large)")
+        checkEqual(cases.count, 5, "OverlaySize: all expected cases")
+        check(cases.contains(.squareAlbum), "OverlaySize: includes Square Album")
         print("  ✓ OverlaySize has expected cases")
     }
 

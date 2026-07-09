@@ -50,10 +50,23 @@ func testOverlaySize() {
         print("  ✓ Large dimensions")
     }
 
+    // Square Album dimensions
+    do {
+        let size = OverlaySize.squareAlbum
+        let (w, h) = size.dimensions
+        checkApprox(Double(w), 360.0, accuracy: 0.1)
+        checkApprox(Double(h), 360.0, accuracy: 0.1)
+        checkEqual(size.displayName, "Square Album", "square album name")
+        checkEqual(size.rawValue, "squareAlbum", "square album raw")
+        check(!size.isMini, "square album is not mini")
+        checkEqual(size.frameAutosaveName, "LyricsOverlaySquareAlbum", "square album frame autosave")
+        print("  ✓ Square Album dimensions")
+    }
+
     // All cases
     do {
         let all = OverlaySize.allCases
-        checkEqual(all.count, 4, "allCases count")
+        checkEqual(all.count, 5, "allCases count")
         print("  ✓ All cases count")
     }
 

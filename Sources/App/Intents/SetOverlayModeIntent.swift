@@ -3,7 +3,7 @@ import SpotifyLyricsCore
 
 /// AppEnum wrapper for OverlaySize.
 enum OverlaySizeEnum: String, AppEnum {
-    case mini, small, medium, large
+    case mini, small, medium, large, squareAlbum
 
     static var typeDisplayRepresentation = TypeDisplayRepresentation(name: "Overlay Size")
     static var caseDisplayRepresentations: [OverlaySizeEnum: DisplayRepresentation] = [
@@ -11,6 +11,7 @@ enum OverlaySizeEnum: String, AppEnum {
         .small: "Small",
         .medium: "Medium",
         .large: "Large",
+        .squareAlbum: "Square Album",
     ]
 
     var toOverlaySize: OverlaySize {

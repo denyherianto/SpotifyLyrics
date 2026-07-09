@@ -144,9 +144,20 @@ final class OverlayController: ObservableObject {
             get: { [weak self] in self?.animationMode ?? .karaoke },
             set: { [weak self] in self?.animationMode = $0 }
         )
-        let view = LyricsOverlayView(lyricsManager: lyricsManager, playerManager: playerManager, backgroundOpacity: opacityBinding, animationMode: animationModeBinding, onClose: { [weak self] in
-            self?.hide()
-        })
+        let overlaySizeBinding = Binding<OverlaySize>(
+            get: { [weak self] in self?.overlaySize ?? .medium },
+            set: { [weak self] in self?.overlaySize = $0 }
+        )
+        let view = LyricsOverlayView(
+            lyricsManager: lyricsManager,
+            playerManager: playerManager,
+            backgroundOpacity: opacityBinding,
+            animationMode: animationModeBinding,
+            overlaySize: overlaySizeBinding,
+            onClose: { [weak self] in
+                self?.hide()
+            }
+        )
         overlayWindow.show(with: view, size: overlaySize)
         isVisible = true
     }
@@ -209,9 +220,20 @@ final class OverlayController: ObservableObject {
                 get: { [weak self] in self?.animationMode ?? .karaoke },
                 set: { [weak self] in self?.animationMode = $0 }
             )
-            let view = LyricsOverlayView(lyricsManager: lyricsManager, playerManager: playerManager, backgroundOpacity: opacityBinding, animationMode: animationModeBinding, onClose: { [weak self] in
-                self?.hide()
-            })
+            let overlaySizeBinding = Binding<OverlaySize>(
+                get: { [weak self] in self?.overlaySize ?? .medium },
+                set: { [weak self] in self?.overlaySize = $0 }
+            )
+            let view = LyricsOverlayView(
+                lyricsManager: lyricsManager,
+                playerManager: playerManager,
+                backgroundOpacity: opacityBinding,
+                animationMode: animationModeBinding,
+                overlaySize: overlaySizeBinding,
+                onClose: { [weak self] in
+                    self?.hide()
+                }
+            )
             overlayWindow.replaceContent(with: view, size: overlaySize)
         }
     }

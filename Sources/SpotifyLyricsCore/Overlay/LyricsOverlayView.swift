@@ -6,13 +6,22 @@ public struct LyricsOverlayView: View {
     @ObservedObject var playerManager: SpotifyPlayerManager
     @Binding var backgroundOpacity: Double
     @Binding var animationMode: AnimationMode
+    @Binding var overlaySize: OverlaySize
     var onClose: (() -> Void)?
 
-    public init(lyricsManager: LyricsManager, playerManager: SpotifyPlayerManager, backgroundOpacity: Binding<Double> = .constant(0.85), animationMode: Binding<AnimationMode> = .constant(.karaoke), onClose: (() -> Void)? = nil) {
+    public init(
+        lyricsManager: LyricsManager,
+        playerManager: SpotifyPlayerManager,
+        backgroundOpacity: Binding<Double> = .constant(0.85),
+        animationMode: Binding<AnimationMode> = .constant(.karaoke),
+        overlaySize: Binding<OverlaySize> = .constant(.medium),
+        onClose: (() -> Void)? = nil
+    ) {
         self.lyricsManager = lyricsManager
         self.playerManager = playerManager
         self._backgroundOpacity = backgroundOpacity
         self._animationMode = animationMode
+        self._overlaySize = overlaySize
         self.onClose = onClose
     }
 
@@ -51,11 +60,7 @@ public struct LyricsOverlayView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(.ultraThinMaterial)
-                .opacity(backgroundOpacity)
-        )
+        .background(overlayBackground)
         .overlay(alignment: .topLeading) {
             if let track = playerManager.currentTrack {
                 VStack(alignment: .leading, spacing: 2) {
@@ -136,6 +141,20 @@ public struct LyricsOverlayView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: showCardPreview)
+    }
+
+    @ViewBuilder
+    private var overlayBackground: some View {
+        if overlaySize == .squareAlbum {
+            AlbumArtworkBackground(
+                artworkURL: playerManager.artworkURL,
+                opacity: backgroundOpacity
+            )
+        } else {
+            RoundedRectangle(cornerRadius: 16)
+                .fill(.ultraThinMaterial)
+                .opacity(backgroundOpacity)
+        }
     }
 
     @ViewBuilder
@@ -343,6 +362,119 @@ public struct LyricsOverlayView: View {
         // (waiting / loading / no lyrics) can persist for a whole track, so a TimelineView here
         // would burn the main thread at the display refresh rate for purely decorative motion.
         .breathing()
+    }
+}
+
+// MARK: - Square Album background
+
+private struct AlbumArtworkBackground: View {
+    let artworkURL: URL?
+    let opacity: Double
+
+    @State private var artworkImage: NSImage?
+    @State private var tintColor = Color(red: 0.18, green: 0.08, blue: 0.05)
+
+    var body: some View {
+        ZStack {
+            tintOnlyBackground
+
+            if let artworkImage {
+                Image(nsImage: artworkImage)
+                    .resizable()
+                    .scaledToFill()
+                    .transition(.opacity)
+            }
+
+            tintColor
+                .opacity(0.16 + opacity * 0.24)
+
+            Color.black
+                .opacity(0.22 + opacity * 0.42)
+
+            LinearGradient(
+                colors: [
+                    .black.opacity(0.12 + opacity * 0.16),
+                    .clear,
+                    .black.opacity(0.30 + opacity * 0.26)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .task(id: artworkURL) {
+            await loadArtwork()
+        }
+    }
+
+    private var tintOnlyBackground: some View {
+        LinearGradient(
+            colors: [
+                tintColor.opacity(0.42 + opacity * 0.28),
+                Color.black.opacity(0.82),
+                tintColor.opacity(0.22 + opacity * 0.16)
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    @MainActor
+    private func loadArtwork() async {
+        guard let artworkURL else {
+            artworkImage = nil
+            tintColor = Color(red: 0.18, green: 0.08, blue: 0.05)
+            return
+        }
+
+        do {
+            let (data, _) = try await URLSession.shared.data(from: artworkURL)
+            guard let image = NSImage(data: data) else {
+                artworkImage = nil
+                return
+            }
+            artworkImage = image
+            if let color = image.averageColor {
+                tintColor = Color(nsColor: color)
+            }
+        } catch {
+            artworkImage = nil
+        }
+    }
+}
+
+private extension NSImage {
+    var averageColor: NSColor? {
+        guard let cgImage = cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            return nil
+        }
+
+        let width = 1
+        let height = 1
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+        var pixel = [UInt8](repeating: 0, count: 4)
+
+        guard let context = CGContext(
+            data: &pixel,
+            width: width,
+            height: height,
+            bitsPerComponent: 8,
+            bytesPerRow: 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: bitmapInfo
+        ) else {
+            return nil
+        }
+
+        context.interpolationQuality = .medium
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+
+        return NSColor(
+            calibratedRed: CGFloat(pixel[0]) / 255,
+            green: CGFloat(pixel[1]) / 255,
+            blue: CGFloat(pixel[2]) / 255,
+            alpha: 1
+        )
     }
 }
 
