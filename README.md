@@ -11,7 +11,6 @@
 <p align="center">
   <img src="https://img.shields.io/badge/platform-macOS%2013%2B-blue" alt="macOS 13+"/>
   <img src="https://img.shields.io/badge/Swift-6.0-orange" alt="Swift 6.0 toolchain"/>
-  <img src="https://img.shields.io/badge/Spotify%20Web%20API-not%20used-1DB954" alt="No Spotify Web API"/>
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"/>
 </p>
 
