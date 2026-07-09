@@ -31,6 +31,7 @@ struct MenuBarView: View {
     @StateObject private var colorExtractor = DominantColorExtractor()
     @State private var isHovering = false
     @State private var isSettingsExpanded = false
+    private let appVersionText = AppVersionDisplay.currentMarketingVersion()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -403,6 +404,14 @@ struct MenuBarView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Text(appVersionText)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+                    .accessibilityLabel("App version \(appVersionText)")
 
                 Spacer()
 

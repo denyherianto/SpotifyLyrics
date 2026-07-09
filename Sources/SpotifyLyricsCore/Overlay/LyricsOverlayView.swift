@@ -66,15 +66,14 @@ public struct LyricsOverlayView: View {
                         .font(.system(size: 11, weight: .medium, design: .rounded))
                         .foregroundStyle(.white.opacity(0.6))
                     if let summary = lyricsManager.songSummary {
-                        Text(summary)
-                            .font(.system(size: 11, weight: .regular, design: .rounded))
-                            .foregroundStyle(.white.opacity(0.5))
-                            .italic()
+                        SummaryMarqueeText(summary)
                     }
                 }
                 .lineLimit(1)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 10)
+                .padding(.trailing, 34)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .opacity(isOverlayHovered ? 1 : 0)
             }
         }
@@ -225,6 +224,7 @@ public struct LyricsOverlayView: View {
                 }
                 .padding(.horizontal, 24)
             }
+            .mask(lyricPanelFadeMask)
             .onAppear {
                 scrollProxy = proxy
                 displayedLineIndex = lyricsManager.currentLineIndex
@@ -250,6 +250,20 @@ public struct LyricsOverlayView: View {
                 }
             }
         }
+    }
+
+    private var lyricPanelFadeMask: some View {
+        let stops = LyricPanelFadeStops()
+        return LinearGradient(
+            stops: [
+                .init(color: .clear, location: stops.topClear),
+                .init(color: .black, location: stops.topOpaque),
+                .init(color: .black, location: stops.bottomOpaque),
+                .init(color: .clear, location: stops.bottomClear)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
     }
 
     /// Builds a line view. Every line uses the same `TimelineView` structure to keep
@@ -329,6 +343,140 @@ public struct LyricsOverlayView: View {
         // (waiting / loading / no lyrics) can persist for a whole track, so a TimelineView here
         // would burn the main thread at the display refresh rate for purely decorative motion.
         .breathing()
+    }
+}
+
+// MARK: - Lyric panel fade
+
+public struct LyricPanelFadeStops: Equatable {
+    public let topClear: CGFloat
+    public let topOpaque: CGFloat
+    public let bottomOpaque: CGFloat
+    public let bottomClear: CGFloat
+
+    public init(
+        topClear: CGFloat = 0,
+        topOpaque: CGFloat = 0.16,
+        bottomOpaque: CGFloat = 0.84,
+        bottomClear: CGFloat = 1
+    ) {
+        self.topClear = topClear
+        self.topOpaque = topOpaque
+        self.bottomOpaque = bottomOpaque
+        self.bottomClear = bottomClear
+    }
+}
+
+// MARK: - AI summary marquee
+
+public struct SummaryMarqueeMetrics: Equatable {
+    public static let minimumDuration: Double = 5
+    public static let pointsPerSecond: CGFloat = 22
+    private static let measurementTolerance: CGFloat = 1
+
+    public let containerWidth: CGFloat
+    public let contentWidth: CGFloat
+
+    public init(containerWidth: CGFloat, contentWidth: CGFloat) {
+        self.containerWidth = max(0, containerWidth)
+        self.contentWidth = max(0, contentWidth)
+    }
+
+    public var shouldScroll: Bool {
+        contentWidth > containerWidth + Self.measurementTolerance
+    }
+
+    public var scrollDistance: CGFloat {
+        shouldScroll ? contentWidth - containerWidth : 0
+    }
+
+    public var duration: Double {
+        guard shouldScroll else { return 0 }
+        return max(Self.minimumDuration, Double(scrollDistance / Self.pointsPerSecond))
+    }
+}
+
+private struct SummaryMarqueeText: View {
+    let text: String
+
+    @State private var containerWidth: CGFloat = 0
+    @State private var contentWidth: CGFloat = 0
+    @State private var isShiftedLeft = false
+    @State private var animationGeneration = 0
+
+    init(_ text: String) {
+        self.text = text
+    }
+
+    private var metrics: SummaryMarqueeMetrics {
+        SummaryMarqueeMetrics(containerWidth: containerWidth, contentWidth: contentWidth)
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            let currentMetrics = SummaryMarqueeMetrics(
+                containerWidth: proxy.size.width,
+                contentWidth: contentWidth
+            )
+
+            Text(text)
+                .font(.system(size: 11, weight: .regular, design: .rounded))
+                .foregroundStyle(.white.opacity(0.5))
+                .italic()
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .offset(x: isShiftedLeft && currentMetrics.shouldScroll ? -currentMetrics.scrollDistance : 0)
+                .background(
+                    GeometryReader { textProxy in
+                        Color.clear.preference(key: SummaryTextWidthPreferenceKey.self, value: textProxy.size.width)
+                    }
+                )
+                .animation(
+                    currentMetrics.shouldScroll
+                        ? .easeInOut(duration: currentMetrics.duration).repeatForever(autoreverses: true)
+                        : .default,
+                    value: isShiftedLeft
+                )
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .clipped()
+                .onAppear {
+                    containerWidth = proxy.size.width
+                    restartAnimation()
+                }
+                .onChange(of: proxy.size.width) { width in
+                    containerWidth = width
+                    restartAnimation()
+                }
+        }
+        .frame(height: 14)
+        .clipped()
+        .onPreferenceChange(SummaryTextWidthPreferenceKey.self) { width in
+            contentWidth = width
+            restartAnimation()
+        }
+        .onChange(of: text) { _ in
+            restartAnimation()
+        }
+    }
+
+    private func restartAnimation() {
+        animationGeneration += 1
+        let generation = animationGeneration
+        isShiftedLeft = false
+
+        guard metrics.shouldScroll else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+            guard generation == animationGeneration else { return }
+            isShiftedLeft = true
+        }
+    }
+}
+
+private struct SummaryTextWidthPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }
 
