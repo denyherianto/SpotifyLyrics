@@ -113,7 +113,7 @@ public final class SpotifyPlayerManager: ObservableObject {
         }
     }
 
-    private func applyAXPoll(_ info: AccessibilityBridge.AXPlaybackInfo?) {
+    func applyAXPoll(_ info: AccessibilityBridge.AXPlaybackInfo?) {
         isAXPolling = false
         guard let info else { return }
 
@@ -122,26 +122,17 @@ public final class SpotifyPlayerManager: ObservableObject {
         // rebuild the entire SwiftUI overlay several×/sec and make animations feel laggy.
         if isLiked != info.isLiked { isLiked = info.isLiked }
 
-        let newState: AppleScriptBridge.PlayerState = info.isPlaying ? .playing : .paused
-        if newState != playerState {
-            playerState = newState
-            // A state change (e.g. resume) should refresh the authoritative AppleScript read
-            // promptly even if we're currently in idle backoff.
-            forceFullPoll = true
-        }
-
-        // Use AX progress to cross-check interpolation drift
-        if let progress = info.progress, let track = currentTrack, track.duration > 0 {
-            let axPosition = progress * track.duration
-            let interpolated = playbackPosition
-            let error = interpolated - axPosition
-
-            // Only correct if the AX position looks reasonable (not 0, not stale)
-            if axPosition > 0.5 && abs(error) < 5.0 {
-                // Exponential moving average of drift
-                driftOffset = driftOffset * (1 - driftAlpha) + error * driftAlpha
+        if let isPlaying = info.isPlaying {
+            let newState: AppleScriptBridge.PlayerState = isPlaying ? .playing : .paused
+            if newState != playerState {
+                playerState = newState
+                // A state change (e.g. resume) should refresh the authoritative AppleScript read
+                // promptly even if we're currently in idle backoff.
+                forceFullPoll = true
             }
         }
+        // Do not use AX slider progress to correct playbackPosition: Spotify exposes other
+        // sliders in the same tree, so AppleScript remains the authoritative position source.
     }
 
     private func poll() {

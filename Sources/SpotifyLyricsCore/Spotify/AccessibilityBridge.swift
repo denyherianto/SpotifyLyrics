@@ -17,11 +17,11 @@ public final class AccessibilityBridge: @unchecked Sendable {
     public struct AXPlaybackInfo: Equatable, Sendable {
         public let title: String
         public let artist: String
-        public let isPlaying: Bool
+        public let isPlaying: Bool?
         public let progress: Double?  // 0..1 normalized progress
         public let isLiked: Bool
 
-        public init(title: String, artist: String, isPlaying: Bool, progress: Double?, isLiked: Bool) {
+        public init(title: String, artist: String, isPlaying: Bool?, progress: Double?, isLiked: Bool) {
             self.title = title
             self.artist = artist
             self.isPlaying = isPlaying
@@ -73,7 +73,7 @@ public final class AccessibilityBridge: @unchecked Sendable {
         // Traverse the UI tree to find Now Playing elements
         var title = ""
         var artist = ""
-        var isPlaying = false
+        var isPlaying: Bool?
         var progress: Double?
         var isLiked = false
 
@@ -86,10 +86,8 @@ public final class AccessibilityBridge: @unchecked Sendable {
             // Detect play/pause button
             if roleStr == "AXButton" {
                 let desc = (getAttribute(element, attribute: kAXDescriptionAttribute) as? String) ?? ""
-                if desc.lowercased().contains("pause") {
-                    isPlaying = true
-                } else if desc.lowercased().contains("play") && !desc.lowercased().contains("play") {
-                    isPlaying = false
+                if let inferredState = Self.inferPlaybackState(buttonDescription: desc, title: titleStr) {
+                    isPlaying = inferredState
                 }
 
                 // Like button
@@ -139,6 +137,22 @@ public final class AccessibilityBridge: @unchecked Sendable {
             progress: progress,
             isLiked: isLiked
         )
+    }
+
+    static func inferPlaybackState(buttonDescription: String?, title: String?) -> Bool? {
+        for rawText in [buttonDescription, title] {
+            let text = (rawText ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+
+            if text == "pause" || text.hasPrefix("pause ") {
+                return true
+            }
+            if text == "play" {
+                return false
+            }
+        }
+        return nil
     }
 
     /// Read the focused element description (useful for debugging the AX tree).
